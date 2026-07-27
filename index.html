@@ -1,49 +1,139 @@
 <!DOCTYPE html>
-<html>
-<head>
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>GJ AI Investor</title>
-<style>
-body{
-background:#07101d;
-color:white;
-font-family:-apple-system,Arial,sans-serif;
-text-align:center;
-padding:60px 20px;
-}
-h1{font-size:42px;}
-.card{
-background:#152238;
-padding:25px;
-border-radius:20px;
-max-width:350px;
-margin:auto;
-}
-</style>
-</head>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="description" content="GJ AI Investor demo app for a £500 paper portfolio with market intelligence and heating oil tracking." />
+    <title>GJ AI Investor</title>
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <header class="topbar">
+      <div class="brand">
+        <div class="brand-mark">GJ</div>
+        <div>
+          <strong>GJ AI Investor</strong>
+          <span>Demo portfolio intelligence</span>
+        </div>
+      </div>
+      <div class="status-pill" id="last-updated">Demo data ready</div>
+    </header>
 
-<body>
+    <main class="page-shell">
+      <section class="hero card" aria-labelledby="hero-title">
+        <div>
+          <span class="eyebrow">Premium demo dashboard</span>
+          <h1 id="hero-title">Protect capital. Grow wealth. Explain every decision.</h1>
+          <p>
+            This prototype presents a clean banking-style view of a £500 paper portfolio with clear signals, risk framing, and a practical fuel tracker for SA66 7UZ.
+          </p>
+          <div class="hero-metrics" aria-label="Portfolio highlights">
+            <article>
+              <span>Paper portfolio</span>
+              <strong>£500.00</strong>
+            </article>
+            <article>
+              <span>Cash reserve</span>
+              <strong>£125.00</strong>
+            </article>
+            <article>
+              <span>Today</span>
+              <strong id="today">Loading…</strong>
+            </article>
+          </div>
+        </div>
 
-<div class="card">
+        <aside class="recommendation-card" aria-labelledby="recommendation-title">
+          <p class="label">Recommendation</p>
+          <h2 id="recommendation-title">BUY</h2>
+          <p class="summary">A disciplined entry is justified because the risk-adjusted setup is improving and volatility remains manageable.</p>
+          <div class="recommendation-meta">
+            <div>
+              <span>Confidence</span>
+              <strong>82%</strong>
+            </div>
+            <div>
+              <span>Risk</span>
+              <strong>Moderate</strong>
+            </div>
+            <div>
+              <span>Exit plan</span>
+              <strong>Trail stop</strong>
+            </div>
+          </div>
+        </aside>
+      </section>
 
-<h1>📈</h1>
+      <section class="section-row" aria-label="Market overview">
+        <article class="section-card card">
+          <div class="section-heading">
+            <div>
+              <h2>Market cards</h2>
+              <p>Demo data for now. High-importance alerts only.</p>
+            </div>
+            <button class="refresh-btn" type="button" data-refresh>Refresh demo</button>
+          </div>
+          <div class="market-grid" id="market-grid"></div>
+        </article>
+      </section>
 
-<h2>GJ AI Investor</h2>
+      <section class="section-row" aria-label="Fuel tracker and wealth overview">
+        <article class="section-card card">
+          <div class="section-heading">
+            <div>
+              <h2>Heating oil tracker</h2>
+              <p>500 litres • SA66 7UZ • high-importance alerts only</p>
+            </div>
+          </div>
+          <div class="oil-grid">
+            <article class="oil-card">
+              <h3>DJ Davies Fuels</h3>
+              <div class="metric">Awaiting live quote</div>
+              <p class="meta">Always included in the comparison view</p>
+            </article>
+            <article class="oil-card">
+              <h3>BoilerJuice</h3>
+              <div class="metric">Awaiting live quote</div>
+              <p class="meta">Comparison partner for delivery pricing</p>
+            </article>
+            <article class="oil-card">
+              <h3>Local suppliers</h3>
+              <div class="metric">Awaiting live quote</div>
+              <p class="meta">Delivered price incl. VAT</p>
+            </article>
+          </div>
+        </article>
 
-<p><strong>Protect Capital. Grow Wealth.</strong></p>
+        <article class="section-card card">
+          <div class="section-heading">
+            <div>
+              <h2>GJ Wealth</h2>
+              <p>Cash, investments, pensions and property snapshot</p>
+            </div>
+          </div>
+          <div class="wealth-grid" id="wealth-grid"></div>
+        </article>
+      </section>
 
-<hr>
+      <section class="section-row" aria-label="Alerts">
+        <article class="section-card card">
+          <div class="section-heading">
+            <div>
+              <h2>High-importance alerts</h2>
+              <p>Only the most relevant market events are surfaced here.</p>
+            </div>
+          </div>
+          <ul class="alerts-list">
+            <li>Geopolitical tension remains a key risk for energy and defensive positioning.</li>
+            <li>Higher oil costs could pressure transport and consumer spending.</li>
+            <li>Macro policy updates should be monitored before enlarging risk.</li>
+          </ul>
+        </article>
+      </section>
+    </main>
 
-<p>Portfolio</p>
-<h1>£500.00</h1>
+    <p class="footer-note">Prototype only. Market figures shown here are demonstration data and are not investment advice.</p>
 
-<p>Today's recommendation</p>
-
-<h3>WAIT</h3>
-
-<p>No high-quality opportunities today.</p>
-
-</div>
-
-</body>
+    <script src="script.js"></script>
+  </body>
 </html>
