@@ -287,6 +287,90 @@
             </div>
           </section>
 
+          <section class="card card-large portfolio-analytics-card" id="portfolio-analytics">
+            <div class="card-header">
+              <div>
+                <p class="eyebrow">Portfolio Analytics</p>
+                <h2>Performance overview</h2>
+              </div>
+              <span class="status-pill">Rule-based coach</span>
+            </div>
+            <div class="analytics-body">
+              <div class="analytics-metrics-grid">
+                <div class="analytics-metric"><span>Total return</span><strong id="analytics-total-return">£0.00</strong></div>
+                <div class="analytics-metric"><span>Total return %</span><strong id="analytics-total-return-pct">0.00%</strong></div>
+                <div class="analytics-metric"><span>Best asset</span><strong id="analytics-best-asset">—</strong></div>
+                <div class="analytics-metric"><span>Worst asset</span><strong id="analytics-worst-asset">—</strong></div>
+                <div class="analytics-metric"><span>Completed trades</span><strong id="analytics-completed-trades">0</strong></div>
+                <div class="analytics-metric"><span>Open positions</span><strong id="analytics-open-positions">0</strong></div>
+                <div class="analytics-metric"><span>Win rate</span><strong id="analytics-win-rate">0%</strong></div>
+                <div class="analytics-metric"><span>Avg gain</span><strong id="analytics-average-gain">£0.00</strong></div>
+                <div class="analytics-metric"><span>Avg loss</span><strong id="analytics-average-loss">£0.00</strong></div>
+                <div class="analytics-metric"><span>Largest gain</span><strong id="analytics-largest-gain">£0.00</strong></div>
+                <div class="analytics-metric"><span>Largest loss</span><strong id="analytics-largest-loss">£0.00</strong></div>
+                <div class="analytics-metric"><span>Cash allocation</span><strong id="analytics-cash-allocation">0%</strong></div>
+                <div class="analytics-metric"><span>Invested allocation</span><strong id="analytics-invested-allocation">0%</strong></div>
+              </div>
+
+              <div class="analytics-goals-coach">
+                <div class="analytics-goals-card">
+                  <p class="eyebrow">Personal goal</p>
+                  <h3>Target portfolio</h3>
+                  <div class="goal-buttons" id="goal-buttons">
+                    <button class="ghost-btn goal-btn" type="button" data-goal="1000">£1,000</button>
+                    <button class="ghost-btn goal-btn" type="button" data-goal="2500">£2,500</button>
+                    <button class="ghost-btn goal-btn" type="button" data-goal="5000">£5,000</button>
+                    <button class="ghost-btn goal-btn" type="button" data-goal="10000">£10,000</button>
+                  </div>
+                  <div class="goal-summary">
+                    <div><span>Progress</span><strong id="goal-progress">0%</strong></div>
+                    <div><span>Remaining</span><strong id="goal-remaining">£0.00</strong></div>
+                    <div><span>Est. completion</span><strong id="goal-estimated">—</strong></div>
+                  </div>
+                </div>
+                <div class="analytics-coach-card">
+                  <p class="eyebrow">Rule-based portfolio coaching</p>
+                  <h3>Insights</h3>
+                  <div class="coach-section">
+                    <strong>Strengths</strong>
+                    <ul id="coach-strengths"></ul>
+                  </div>
+                  <div class="coach-section">
+                    <strong>Areas to improve</strong>
+                    <ul id="coach-improvements"></ul>
+                  </div>
+                  <div class="coach-section">
+                    <strong>Suggested action</strong>
+                    <p id="coach-action">Review asset concentration and rebalance as needed.</p>
+                  </div>
+                  <div class="coach-section">
+                    <strong>Risk warning</strong>
+                    <p id="coach-warning">Maintain diversification and avoid overtrading.</p>
+                  </div>
+                </div>
+              </div>
+
+              <div class="analytics-charts-grid">
+                <div class="analytics-chart-card">
+                  <h3>Portfolio value</h3>
+                  <canvas id="portfolio-value-chart"></canvas>
+                </div>
+                <div class="analytics-chart-card">
+                  <h3>Cumulative P/L</h3>
+                  <canvas id="cumulative-pl-chart"></canvas>
+                </div>
+                <div class="analytics-chart-card">
+                  <h3>Asset allocation</h3>
+                  <canvas id="allocation-pie-chart"></canvas>
+                </div>
+                <div class="analytics-chart-card">
+                  <h3>Monthly performance</h3>
+                  <canvas id="monthly-performance-chart"></canvas>
+                </div>
+              </div>
+            </div>
+          </section>
+
           <section class="card card-medium holdings-card" id="holdings">
             <div class="card-header">
               <div>

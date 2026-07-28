@@ -22,7 +22,7 @@ const wealthItems = [
   { title: 'Cash', metric: '£125.00', note: 'Liquidity buffer' },
   { title: 'Investments', metric: 'To model', note: 'Paper portfolio focus' },
   { title: 'Pensions', metric: 'To model', note: 'Long-term planning' },
-  { title: 'Property', metric: 'To add', note: 'Legacy asset view' }
+  { title: 'Property', metric: 'To model', note: 'Legacy asset view' }
 ];
 
 const watchlistItems = [
@@ -1051,7 +1051,15 @@ animateAiScore();
 
 /** Portfolio: paper trading simulation **/
 const PORTFOLIO_KEY = 'gj_portfolio_v1';
+const ANALYTICS_HISTORY_KEY = 'gj_portfolio_analytics_v1';
+const ANALYTICS_GOAL_KEY = 'gj_portfolio_goal_v1';
 const STARTING_CASH = 500;
+let analyticsHistory = [];
+let selectedGoal = 2500;
+let portfolioValueChart = null;
+let cumulativePlChart = null;
+let allocationPieChart = null;
+let monthlyPerformanceChart = null;
 
 function defaultPortfolio() {
   return {
