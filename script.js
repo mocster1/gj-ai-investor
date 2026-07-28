@@ -63,24 +63,55 @@ async function fetchRssFeed(url) {
   }
 }
 
-function simpleSentimentAnalysis(headlines) {
-  // naive keyword-based sentiment: bullish words +1, bearish words -1
-  const bullish = ['rise','rises','up','gain','gains','positive','beat','beats','outperform','strong','bullish','soars','surge','surges'];
-  const bearish = ['fall','falls','down','drop','drops','negative','miss','misses','weak','bearish','plunge','plunges','decline','declines'];
+function analyseHeadlineSentiment(headline) {
+  const lower = headline.toLowerCase();
+  const bullish = ['rally','rise','rises','up','gain','gains','positive','beat','beats','outperform','strong','bullish','soar','soars','surge','surges','growth','record high','record highs','recovery','rate cut','easing','approval'];
+  const bearish = ['fall','falls','down','drop','drops','negative','miss','misses','weak','bearish','plunge','plunges','decline','declines','recession','inflation','rate hike','conflict','sanction','sanctions','warning','downgrade','sell-off','selloff'];
+
+  // helper negation: simple check for 'not' or "n't" within 3 words before keyword
+  function isNegated(h, idx) {
+    const windowText = h.slice(Math.max(0, idx - 40), idx); // previous ~40 chars
+    return /\b(not|no|never|n't)\b/.test(windowText);
+  }
+
   let score = 0;
-  headlines.forEach(h => {
-    const lower = h.toLowerCase();
-    bullish.forEach(w => { if (lower.includes(w)) score += 1; });
-    bearish.forEach(w => { if (lower.includes(w)) score -= 1; });
+  bullish.forEach(k => {
+    let pos = lower.indexOf(k);
+    while (pos !== -1) {
+      if (!isNegated(lower, pos)) score += 2; // bullish weight
+      pos = lower.indexOf(k, pos + 1);
+    }
   });
-  const maxPossible = headlines.length * 3 || 1;
-  const norm = Math.max(-maxPossible, Math.min(maxPossible, score));
-  const pct = Math.round((Math.abs(norm) / maxPossible) * 100);
+  bearish.forEach(k => {
+    let pos = lower.indexOf(k);
+    while (pos !== -1) {
+      if (!isNegated(lower, pos)) score -= 2; // bearish weight
+      pos = lower.indexOf(k, pos + 1);
+    }
+  });
   let label = 'Neutral';
-  if (norm > 1) label = 'Bullish';
-  else if (norm < -1) label = 'Bearish';
-  const explanation = `Headline sentiment score ${norm}/${maxPossible}`;
-  return { label, confidence: pct, explanation, score: norm };
+  if (score > 1) label = 'Bullish';
+  else if (score < -1) label = 'Bearish';
+  return { score, label };
+}
+
+function calculateOverallNewsSentiment(headlines) {
+  const per = headlines.map(h => {
+    const res = analyseHeadlineSentiment(h || '');
+    return { headline: h, score: res.score, label: res.label };
+  });
+  const totalScore = per.reduce((s, p) => s + p.score, 0);
+  const maxPer = 2 * 3; // assume up to 3 keyword hits * weight 2 per headline
+  const maxPossible = Math.max(1, per.length * maxPer);
+  // map to -100..100
+  const normalized = Math.round((totalScore / maxPossible) * 100);
+  const confidence = Math.min(100, Math.round((Math.abs(totalScore) / maxPossible) * 100));
+  const bullish = per.filter(p => p.label === 'Bullish').length;
+  const bearish = per.filter(p => p.label === 'Bearish').length;
+  const neutral = per.filter(p => p.label === 'Neutral').length;
+  const label = normalized > 10 ? 'Bullish' : normalized < -10 ? 'Bearish' : 'Neutral';
+  const explanation = `Headlines analysed: ${per.length}. Bullish ${bullish}, Neutral ${neutral}, Bearish ${bearish}.`;
+  return { per, totalScore, normalized, confidence, bullish, neutral, bearish, label, explanation };
 }
 
 async function refreshMarketNews() {
@@ -90,11 +121,11 @@ async function refreshMarketNews() {
   const warning = document.getElementById('news-warning');
   const sentimentLabel = document.getElementById('news-sentiment-label');
   const sentimentConf = document.getElementById('news-sentiment-confidence');
+  const explanationNews = document.getElementById('explanation-news-summary');
 
   if (loading) loading.style.display = 'inline';
   if (warning) warning.style.display = 'none';
 
-  // Use a public RSS: Financial Times (rss feeds are CORS restricted often). Use ''https://feeds.bbci.co.uk/news/business/rss.xml' as a free CORS-friendly option.
   const feedUrl = 'https://feeds.bbci.co.uk/news/business/rss.xml';
   const items = await fetchRssFeed(feedUrl);
   if (!items) {
@@ -108,36 +139,49 @@ async function refreshMarketNews() {
   newsState.lastUpdate = Date.now();
   newsState.available = true;
 
-  // sentiment
+  // sentiment analysis per requirements
   const headlines = items.map(i => i.title || '');
-  const sentiment = simpleSentimentAnalysis(headlines);
-  newsState.sentiment = sentiment;
+  const overall = calculateOverallNewsSentiment(headlines);
+  newsState.sentiment = overall;
 
   // render
   listEl.innerHTML = '';
-  items.forEach((it) => {
+  items.slice(0,8).forEach((it) => {
     const row = document.createElement('div');
     row.className = 'news-row';
     const date = it.pubDate ? new Date(it.pubDate).toLocaleString('en-GB') : '';
-    row.innerHTML = `<div><a href="${it.link}" target="_blank" rel="noopener noreferrer">${it.title}</a><div class="muted-text">${it.source || ''} · ${date}</div></div>`;
+    const category = it.category || '';
+    row.innerHTML = `<div><a href="${it.link}" target="_blank" rel="noopener noreferrer">${it.title}</a><div class="muted-text">${it.source || ''}${category? ' · '+category:''} · ${date}</div></div>`;
     listEl.appendChild(row);
   });
 
   if (loading) loading.style.display = 'none';
   if (lastUpdateEl) lastUpdateEl.textContent = new Date(newsState.lastUpdate).toLocaleTimeString('en-GB', {hour:'2-digit',minute:'2-digit'});
-  if (sentimentLabel) sentimentLabel.textContent = sentiment.label;
-  if (sentimentConf) sentimentConf.textContent = `${sentiment.confidence}%`;
+  if (sentimentLabel) sentimentLabel.textContent = overall.label;
+  if (sentimentConf) sentimentConf.textContent = `${overall.confidence}%`;
+  if (explanationNews) explanationNews.textContent = `Sentiment score: ${overall.normalized} · Confidence: ${overall.confidence}% · Adjustment: ${Math.round(((overall.normalized/100)*10))}`;
 
-  // Integrate with AI recommendation by slightly adjusting its confidence
+  // Integrate with AI recommendation by adjusting its confidence, capped to ±10
   try {
-    const aiAdjust = sentiment.score || 0;
-    // apply a modest effect: +- up to 6 confidence points
-    const adjustment = Math.max(-6, Math.min(6, aiAdjust * 2));
-    // expose to global for computeAIRecommendation to read if desired
-    window.newsSentimentAdjustment = adjustment;
+    const adjustment = Math.round((overall.normalized / 100) * 10);
+    const capped = Math.max(-10, Math.min(10, adjustment));
+    window.newsSentimentAdjustment = capped;
   } catch (e) {
     window.newsSentimentAdjustment = 0;
   }
+
+  // create alerts for strong sentiment
+  try {
+    if (overall.confidence >= 70 && overall.label !== 'Neutral') {
+      const key = `news:${overall.label}`;
+      createAlert('news', `News: ${overall.label}`, `Overall news sentiment is ${overall.label} (${overall.confidence}%)`, 'Warning', key);
+    }
+  } catch (e) {}
+
+  // recalc AI recommendation
+  runAIRecommendation();
+  // check alerts
+  checkAlerts();
 }
 
 // Auto-refresh news every 15 minutes
@@ -147,6 +191,186 @@ setInterval(refreshMarketNews, NEWS_REFRESH_MINUTES * 60 * 1000);
 // manual button
 const refreshNewsBtn = document.getElementById('refresh-news-btn');
 if (refreshNewsBtn) refreshNewsBtn.addEventListener('click', refreshMarketNews);
+
+// ALERTS: in-app notification centre
+const ALERTS_KEY = 'gj_alerts_v1';
+const ALERT_PREFS_KEY = 'gj_alert_prefs_v1';
+let alerts = [];
+let alertPrefs = null;
+let lastAlertStates = { priceAlerts: {}, aiRecommendation: null, portfolioFlag: null, liveDataAvailable: true, newsStrong: null };
+
+function loadAlertPreferences() {
+  try {
+    const raw = localStorage.getItem(ALERT_PREFS_KEY);
+    if (!raw) return saveAlertPreferences({ price: true, ai: true, portfolio: true, live: true, news: true });
+    alertPrefs = JSON.parse(raw);
+    return alertPrefs;
+  } catch (e) {
+    console.error('loadAlertPreferences', e);
+    alertPrefs = { price: true, ai: true, portfolio: true, live: true, news: true };
+    saveAlertPreferences(alertPrefs);
+    return alertPrefs;
+  }
+}
+
+function saveAlertPreferences(prefs) {
+  try {
+    localStorage.setItem(ALERT_PREFS_KEY, JSON.stringify(prefs));
+    alertPrefs = prefs;
+  } catch (e) {
+    console.error('saveAlertPreferences', e);
+  }
+}
+
+function loadAlerts() {
+  try {
+    const raw = localStorage.getItem(ALERTS_KEY);
+    if (!raw) { alerts = []; saveAlerts(); return alerts; }
+    alerts = JSON.parse(raw) || [];
+    return alerts;
+  } catch (e) {
+    console.error('loadAlerts', e);
+    alerts = [];
+    saveAlerts();
+    return alerts;
+  }
+}
+
+function saveAlerts() {
+  try {
+    localStorage.setItem(ALERTS_KEY, JSON.stringify(alerts));
+    renderAlerts();
+  } catch (e) {
+    console.error('saveAlerts', e);
+  }
+}
+
+function renderAlerts() {
+  const panel = document.getElementById('alerts-panel');
+  const list = document.getElementById('alerts-list');
+  const countEl = document.getElementById('notification-count');
+  if (!list) return;
+  list.innerHTML = '';
+  const unread = alerts.filter(a => !a.read).length;
+  if (countEl) {
+    if (unread > 0) { countEl.style.display = 'inline-block'; countEl.textContent = String(unread); } else { countEl.style.display = 'none'; }
+  }
+  alerts.slice(0,200).forEach((a) => {
+    const el = document.createElement('div');
+    el.style.padding = '0.55rem';
+    el.style.borderRadius = '0.6rem';
+    el.style.background = a.read ? 'rgba(255,255,255,0.02)' : 'linear-gradient(90deg, rgba(124,58,237,0.08), rgba(76,201,240,0.06))';
+    el.innerHTML = `<div style="display:flex;justify-content:space-between;gap:0.5rem"><div style="flex:1"><strong>${a.title}</strong><div class=\"muted-text\">${a.message}</div><div class=\"muted-text\">${new Date(a.timestamp).toLocaleString('en-GB')}</div></div><div style=\"margin-left:0.4rem;display:flex;flex-direction:column;gap:0.4rem\"><button class=\"ghost-btn mark-read-btn\" data-id=\"${a.id}\">${a.read? 'Mark unread':'Mark read'}</button></div></div>`;
+    list.appendChild(el);
+  });
+}
+
+function createAlert(type, title, message, severity = 'Info', dedupeKey = null) {
+  if (!alertPrefs) loadAlertPreferences();
+  // map type to pref key
+  const typeMap = { price: 'price', ai: 'ai', portfolio: 'portfolio', live: 'live', news: 'news' };
+  const prefKey = typeMap[type] || 'price';
+  if (!alertPrefs[prefKey]) return null;
+  // dedupe: if dedupeKey provided, skip if exists recent
+  if (dedupeKey) {
+    const exists = alerts.find(a => a.dedupe === dedupeKey);
+    if (exists) return null;
+  }
+  const id = `${type}:${Date.now()}:${Math.random().toString(36).slice(2,8)}`;
+  const alert = { id, type, title, message, severity, timestamp: Date.now(), read: false, dedupe: dedupeKey };
+  alerts.unshift(alert);
+  saveAlerts();
+  // show panel badge
+  const btn = document.getElementById('notification-button');
+  if (btn) btn.setAttribute('aria-expanded','true');
+  return alert;
+}
+
+function markAlertRead(id) {
+  const a = alerts.find(x => x.id === id);
+  if (!a) return;
+  a.read = !a.read;
+  saveAlerts();
+}
+
+function markAllRead() {
+  alerts.forEach(a => a.read = true);
+  saveAlerts();
+}
+
+function clearAlerts() {
+  alerts = [];
+  saveAlerts();
+}
+
+// wire alert panel buttons
+const notifBtn = document.getElementById('notification-button');
+if (notifBtn) notifBtn.addEventListener('click', () => {
+  const panel = document.getElementById('alerts-panel');
+  if (!panel) return;
+  const isOpen = panel.style.display === 'block';
+  panel.style.display = isOpen ? 'none' : 'block';
+  notifBtn.setAttribute('aria-expanded', String(!isOpen));
+});
+const markAllBtn = document.getElementById('mark-all-read');
+if (markAllBtn) markAllBtn.addEventListener('click', () => { markAllRead(); });
+const clearBtn = document.getElementById('clear-alerts');
+if (clearBtn) clearBtn.addEventListener('click', () => { clearAlerts(); });
+
+// delegate mark-read buttons
+document.addEventListener('click', (e) => {
+  if (e.target && e.target.classList.contains('mark-read-btn')) {
+    const id = e.target.getAttribute('data-id');
+    markAlertRead(id);
+  }
+});
+
+// initialise alerts & prefs
+loadAlertPreferences();
+loadAlerts();
+renderAlerts();
+
+// wire settings UI
+function populateAlertSettings() {
+  const pPrice = document.getElementById('pref-price');
+  const pAi = document.getElementById('pref-ai');
+  const pPort = document.getElementById('pref-portfolio');
+  const pLive = document.getElementById('pref-live');
+  const pNews = document.getElementById('pref-news');
+  if (!alertPrefs) loadAlertPreferences();
+  if (pPrice) pPrice.checked = !!alertPrefs.price;
+  if (pAi) pAi.checked = !!alertPrefs.ai;
+  if (pPort) pPort.checked = !!alertPrefs.portfolio;
+  if (pLive) pLive.checked = !!alertPrefs.live;
+  if (pNews) pNews.checked = !!alertPrefs.news;
+}
+
+populateAlertSettings();
+
+const savePrefsBtn = document.getElementById('save-prefs');
+if (savePrefsBtn) savePrefsBtn.addEventListener('click', () => {
+  const pPrice = document.getElementById('pref-price');
+  const pAi = document.getElementById('pref-ai');
+  const pPort = document.getElementById('pref-portfolio');
+  const pLive = document.getElementById('pref-live');
+  const pNews = document.getElementById('pref-news');
+  const prefs = {
+    price: !!(pPrice && pPrice.checked),
+    ai: !!(pAi && pAi.checked),
+    portfolio: !!(pPort && pPort.checked),
+    live: !!(pLive && pLive.checked),
+    news: !!(pNews && pNews.checked),
+  };
+  saveAlertPreferences(prefs);
+  renderAlerts();
+});
+
+const resetPrefsBtn = document.getElementById('reset-prefs');
+if (resetPrefsBtn) resetPrefsBtn.addEventListener('click', () => {
+  const defaults = { price: true, ai: true, portfolio: true, live: true, news: true };
+  saveAlertPreferences(defaults);
+  populateAlertSettings();
+});
 
 const marketGrid = document.getElementById('market-grid');
 const tickerTrack = document.getElementById('ticker-track');
@@ -482,6 +706,16 @@ function updateAIRecommendationUI() {
 }
 
 function runAIRecommendation() {
+  try {
+    const prev = window.lastAIRecommendation || null;
+    const results = generateInvestmentRecommendation();
+    if (prev && prev !== results.recommendation) {
+      createAlert('ai', 'AI recommendation changed', `Recommendation changed from ${prev} to ${results.recommendation}`, 'Info', `ai:${results.recommendation}`);
+    }
+    window.lastAIRecommendation = results.recommendation;
+  } catch (e) {
+    console.error('runAIRecommendation', e);
+  }
   updateAIRecommendationUI();
 }
 
@@ -1057,6 +1291,8 @@ document.addEventListener('click', (e) => {
 // Ensure portfolio renders after market updates
 function onMarketRefreshed() {
   renderPortfolio();
+  // perform alerts check after market refresh
+  try { checkAlerts(); } catch (e) { console.error('checkAlerts', e); }
 }
 
 // hook into the existing refresh path
@@ -1069,3 +1305,195 @@ refreshMarketData = async function() {
 
 // initial render
 renderPortfolio();
+
+// Alerts and monitoring
+function checkAlerts() {
+  try {
+    // load prefs and alerts
+    if (!alertPrefs) loadAlertPreferences();
+    if (!alerts) loadAlerts();
+
+    // 1) Price movement alerts (>=5% in 24h)
+    ['bitcoin','ethereum'].forEach((asset)=>{
+      const item = marketItems.find(m=>m.id===asset);
+      const change = parseNumeric(item?.change);
+      const triggered = Math.abs(change || 0) >= 5;
+      if (triggered && !lastAlertStates.priceAlerts[asset]) {
+        createAlert('price', `${item.name} moved ${change >=0? 'up':'down'} ${Math.abs(change).toFixed(1)}%`, `${item.name} moved ${change >=0? 'up':'down'} ${Math.abs(change).toFixed(1)}% in 24h`, 'Important', `price:${asset}`);
+        lastAlertStates.priceAlerts[asset] = true;
+      }
+      if (!triggered && lastAlertStates.priceAlerts[asset]) {
+        lastAlertStates.priceAlerts[asset] = false;
+        // allow future alerts
+        const existingIndex = alerts.findIndex(a=>a.dedupe===`price:${asset}`);
+        // do not remove historical alerts
+      }
+    });
+
+    // 2) AI recommendation change handled in runAIRecommendation
+
+    // 3) Portfolio thresholds
+    const portfolio = loadPortfolio();
+    const vals = calculatePortfolioValues(portfolio);
+    const ret = vals.returnPct || 0;
+    if (ret <= -5 && lastAlertStates.portfolioFlag !== 'loss') {
+      createAlert('portfolio','Portfolio loss alert', `Portfolio down ${ret.toFixed(2)}%`, 'Warning', 'portfolio:loss');
+      lastAlertStates.portfolioFlag = 'loss';
+    } else if (ret >= 10 && lastAlertStates.portfolioFlag !== 'gain') {
+      createAlert('portfolio','Portfolio gain', `Portfolio up ${ret.toFixed(2)}%`, 'Info', 'portfolio:gain');
+      lastAlertStates.portfolioFlag = 'gain';
+    } else if (ret > -5 && ret < 10) {
+      lastAlertStates.portfolioFlag = null;
+    }
+
+    // 4) Live data availability
+    const allLive = [liveState.bitcoin, liveState.ethereum, liveState.gbpUsd].every(Boolean);
+    if (!allLive && lastAlertStates.liveDataAvailable === true) {
+      createAlert('live','Live data disconnected', 'Live market data is partially or fully unavailable.', 'Warning', 'live:down');
+      lastAlertStates.liveDataAvailable = false;
+    } else if (allLive && lastAlertStates.liveDataAvailable === false) {
+      createAlert('live','Live data restored', 'Live market data is now connected.', 'Info', 'live:up');
+      lastAlertStates.liveDataAvailable = true;
+    }
+
+    // 5) News strong sentiment alerts already created in refreshMarketNews, but ensure we manage state
+    if (newsState && newsState.sentiment) {
+      const s = newsState.sentiment;
+      if (s.confidence >= 70 && s.label !== 'Neutral' && lastAlertStates.newsStrong !== s.label) {
+        createAlert('news', `Strong news sentiment: ${s.label}`, `News sentiment ${s.label} (${s.confidence}%)`, s.label === 'Bullish' ? 'Info' : 'Important', `news:${s.label}`);
+        lastAlertStates.newsStrong = s.label;
+      }
+      if (s.confidence < 70 && lastAlertStates.newsStrong) {
+        lastAlertStates.newsStrong = null;
+      }
+    }
+
+  } catch (e) {
+    console.error('checkAlerts', e);
+  }
+}
+
+/** Market Charts using CoinGecko + Chart.js **/
+let chartInstance = null;
+let chartState = { asset: 'bitcoin', days: 7, lastData: null };
+
+async function loadChartData(asset, days) {
+  try {
+    const url = `https://api.coingecko.com/api/v3/coins/${asset}/market_chart?vs_currency=gbp&days=${days}`;
+    const res = await fetch(url);
+    if (!res.ok) throw new Error('CoinGecko error');
+    const data = await res.json();
+    // data.prices = [[ts, price], ...]
+    const prices = Array.isArray(data.prices) ? data.prices : [];
+    const labels = prices.map(p => new Date(p[0]));
+    const vals = prices.map(p => p[1]);
+    chartState.lastData = { labels, vals };
+    return { labels, vals };
+  } catch (error) {
+    console.warn('loadChartData failed', error);
+    return null;
+  }
+}
+
+function formatChartNumber(v) {
+  return new Intl.NumberFormat('en-GB', { style: 'currency', currency: 'GBP', minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(v);
+}
+
+function drawChart(labels, data) {
+  const ctx = document.getElementById('market-chart-canvas');
+  if (!ctx) return;
+  const first = data[0];
+  const last = data[data.length - 1];
+  const overallChange = first ? ((last - first) / first) * 100 : 0;
+  const positive = overallChange >= 0;
+  const color = positive ? getComputedStyle(document.documentElement).getPropertyValue('--positive') || '#2dd4bf' : getComputedStyle(document.documentElement).getPropertyValue('--danger') || '#fb7185';
+
+  const prefersReduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  const chartData = {
+    labels: labels.map(l => l.toLocaleString()),
+    datasets: [{
+      label: chartState.asset,
+      data,
+      borderColor: color.trim(),
+      backgroundColor: 'transparent',
+      pointRadius: 0,
+      tension: 0.3
+    }]
+  };
+
+  const config = {
+    type: 'line',
+    data: chartData,
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      animation: prefersReduced ? false : { duration: 400 },
+      scales: {
+        x: { display: false },
+        y: { ticks: { color: 'var(--muted)' }, grid: { color: 'rgba(255,255,255,0.03)' } }
+      },
+      plugins: { legend: { display: false } }
+    }
+  };
+
+  try {
+    if (chartInstance) {
+      // update existing
+      chartInstance.data = chartData;
+      chartInstance.options = config.options;
+      chartInstance.update();
+    } else {
+      chartInstance = new Chart(ctx.getContext('2d'), config);
+    }
+  } catch (e) {
+    console.error('drawChart error', e);
+  }
+
+  // update meta
+  document.getElementById('chart-current').textContent = formatChartNumber(last || 0);
+  document.getElementById('chart-high').textContent = formatChartNumber(Math.max(...data));
+  document.getElementById('chart-low').textContent = formatChartNumber(Math.min(...data));
+  const changeEl = document.getElementById('chart-change');
+  changeEl.textContent = `${overallChange >= 0 ? '+' : ''}${overallChange.toFixed(2)}%`;
+  changeEl.style.color = positive ? 'var(--positive)' : 'var(--danger)';
+}
+
+async function refreshChart(force = false) {
+  const errorEl = document.getElementById('chart-error');
+  if (errorEl) { errorEl.style.display = 'none'; errorEl.textContent = ''; }
+  const data = await loadChartData(chartState.asset, chartState.days);
+  if (!data) {
+    // fail - keep previous if exists
+    if (!chartState.lastData) {
+      if (errorEl) { errorEl.style.display = 'block'; errorEl.textContent = 'Unable to load chart data.'; }
+    }
+    return;
+  }
+  drawChart(data.labels, data.vals);
+}
+
+// UI handlers
+document.addEventListener('click', (e) => {
+  if (e.target && e.target.classList.contains('chart-tab')) {
+    document.querySelectorAll('.chart-tab').forEach(b => b.classList.remove('active'));
+    e.target.classList.add('active');
+    chartState.asset = e.target.getAttribute('data-asset');
+    refreshChart();
+  }
+  if (e.target && e.target.classList.contains('tf-btn')) {
+    document.querySelectorAll('.tf-btn').forEach(b => b.classList.remove('active'));
+    e.target.classList.add('active');
+    chartState.days = Number(e.target.getAttribute('data-days'));
+    refreshChart();
+  }
+  if (e.target && e.target.id === 'refresh-chart-btn') {
+    refreshChart(true);
+  }
+});
+
+// Auto-refresh current chart every 5 minutes
+setInterval(() => { refreshChart(); }, 5 * 60 * 1000);
+
+// initial draw
+refreshChart();

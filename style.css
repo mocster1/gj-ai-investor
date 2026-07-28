@@ -794,6 +794,17 @@ svg {
   #market-news { margin-top: 0.6rem }
 }
 
+.market-charts-card .chart-controls { align-items:center }
+.chart-tabs .chart-tab { padding:0.5rem 0.8rem }
+.timeframes .tf-btn { padding:0.45rem 0.7rem }
+.chart-meta { color:var(--muted) }
+#market-chart-canvas { width:100%; height:260px; display:block }
+
+@media (max-width: 600px) {
+  #market-chart-canvas { height:220px }
+  .chart-meta { font-size:0.92rem }
+}
+
 .watchlist-item strong {
   display: block;
 }
