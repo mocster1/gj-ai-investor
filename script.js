@@ -44,6 +44,8 @@ const tickerItems = [
 const marketGrid = document.getElementById('market-grid');
 const tickerTrack = document.getElementById('ticker-track');
 const mobileTickerTrack = document.getElementById('mobile-ticker-track');
+const marketTicker = document.querySelector('.market-ticker');
+const mobileMarketTicker = document.querySelector('.mobile-market-ticker');
 const sidebar = document.querySelector('.sidebar');
 const navToggle = document.querySelector('.mobile-nav-toggle');
 const mobileDrawer = document.getElementById('mobile-drawer-nav');
@@ -120,7 +122,7 @@ function renderTicker() {
     <div class="ticker-item">
       <span class="ticker-name">${item.name}</span>
       <span class="ticker-value">${item.value}</span>
-      <span class="ticker-change ${item.direction === 'down' ? 'negative' : 'positive'}">${item.change}</span>
+      <span class="ticker-change ${item.direction === 'down' ? 'negative' : item.direction === 'up' ? 'positive' : ''}">${item.change}</span>
     </div>
   `).join('');
 
@@ -131,6 +133,50 @@ function renderTicker() {
   if (mobileTickerTrack) {
     mobileTickerTrack.innerHTML = tickerMarkup;
   }
+}
+
+function setupTickerInteraction(container) {
+  if (!container) {
+    return;
+  }
+
+  let isTouching = false;
+
+  const stopAnimation = () => {
+    const track = container.querySelector('.ticker-track');
+    if (track) {
+      track.classList.add('ticker-paused');
+    }
+  };
+
+  const startAnimation = () => {
+    const track = container.querySelector('.ticker-track');
+    if (track) {
+      track.classList.remove('ticker-paused');
+    }
+  };
+
+  container.addEventListener('mouseenter', stopAnimation);
+  container.addEventListener('mouseleave', () => {
+    if (!isTouching) {
+      startAnimation();
+    }
+  });
+
+  container.addEventListener('touchstart', () => {
+    isTouching = true;
+    stopAnimation();
+  }, { passive: true });
+
+  container.addEventListener('touchend', () => {
+    isTouching = false;
+    startAnimation();
+  });
+
+  container.addEventListener('touchcancel', () => {
+    isTouching = false;
+    startAnimation();
+  });
 }
 
 function updateBriefingTime() {
@@ -270,5 +316,7 @@ renderPortfolioStats();
 renderWatchlist();
 renderNews();
 renderTicker();
+setupTickerInteraction(document.querySelector('.market-ticker'));
+setupTickerInteraction(document.querySelector('.mobile-market-ticker'));
 updateBriefingTime();
 animateAiScore();

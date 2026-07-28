@@ -249,12 +249,23 @@ svg {
   width: max-content;
   min-width: max-content;
   padding: 0.15rem 0;
-  animation: ticker-scroll 22s linear infinite;
+  animation: ticker-scroll 28s linear infinite;
   will-change: transform;
 }
 
-.market-ticker:hover .ticker-track {
+.ticker-track.ticker-paused {
+  animation-play-state: paused !important;
+}
+
+.market-ticker:hover .ticker-track,
+.mobile-market-ticker:hover .ticker-track {
   animation-play-state: paused;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ticker-track {
+    animation: none !important;
+  }
 }
 
 .ticker-item {
@@ -799,10 +810,10 @@ svg {
 
 @keyframes ticker-scroll {
   from {
-    transform: translateX(0);
+    transform: translate3d(0, 0, 0);
   }
   to {
-    transform: translateX(-50%);
+    transform: translate3d(-50%, 0, 0);
   }
 }
 
@@ -883,6 +894,7 @@ svg {
 
   .mobile-market-ticker {
     display: block;
+    touch-action: pan-x;
   }
 
   .market-ticker {
@@ -890,7 +902,7 @@ svg {
   }
 
   .mobile-market-ticker .ticker-track {
-    animation: none;
+    animation: ticker-scroll 28s linear infinite;
   }
 
   .mobile-drawer-nav {
@@ -959,17 +971,23 @@ svg {
     gap: 0.7rem;
     grid-auto-rows: auto;
     align-items: start;
+    width: 100%;
   }
 
   .dashboard-grid > .card {
     align-self: start;
+    width: 100%;
+    max-width: 100%;
   }
 
   .card {
-    min-height: auto;
+    min-height: 0;
     height: auto;
-    padding: 1.2rem;
+    width: 100%;
+    max-width: 100%;
+    padding: 1.35rem;
     border-radius: 1rem;
+    box-sizing: border-box;
   }
 
   .card-large,
@@ -979,6 +997,16 @@ svg {
   .portfolio-card {
     grid-column: 1 / -1;
     height: auto;
+  }
+
+  .icon-btn {
+    width: 44px;
+    height: 44px;
+  }
+
+  .mobile-nav-toggle {
+    width: 44px;
+    height: 44px;
   }
 
   .card-header {
