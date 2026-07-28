@@ -229,6 +229,32 @@
               <span class="status-pill">Demo values</span>
             </div>
             <div class="portfolio-body">
+              <div style="display:flex;flex-direction:column;gap:0.8rem;">
+                <div class="portfolio-summary">
+                  <div class="portfolio-metric"><span>Total value</span><strong id="pf-total">£500.00</strong></div>
+                  <div class="portfolio-metric"><span>Available cash</span><strong id="pf-cash">£500.00</strong></div>
+                  <div class="portfolio-metric"><span>Invested value</span><strong id="pf-invested">£0.00</strong></div>
+                  <div class="portfolio-metric"><span>Profit / Loss</span><strong id="pf-pl">£0.00</strong></div>
+                  <div class="portfolio-metric"><span>Return</span><strong id="pf-return">0%</strong></div>
+                  <div class="portfolio-metric"><span>Holdings</span><strong id="pf-count">0</strong></div>
+                </div>
+
+                <div class="trade-controls" id="trade-controls">
+                  <label class="muted-text">Paper trading only — no real money is being invested.</label>
+                  <div style="display:flex;gap:0.6rem;flex-wrap:wrap;align-items:center;">
+                    <select id="trade-asset" aria-label="Select asset">
+                      <option value="bitcoin">Bitcoin</option>
+                      <option value="ethereum">Ethereum</option>
+                    </select>
+                    <input id="trade-amount" type="number" min="0.01" step="0.01" placeholder="Amount in GBP" aria-label="Amount in GBP" />
+                    <button class="ghost-btn" id="ai-fill-btn">Use AI suggestion</button>
+                    <button class="icon-btn" id="buy-btn">Buy</button>
+                    <button class="icon-btn" id="sell-btn">Sell</button>
+                    <button class="ghost-btn" id="reset-portfolio">Reset Portfolio</button>
+                  </div>
+                  <div id="trade-validation" class="muted-text" style="color:var(--danger);display:block;margin-top:0.4rem"></div>
+                </div>
+              </div>
               <div class="portfolio-chart" aria-label="Portfolio performance chart">
                 <svg viewBox="0 0 320 140" role="img" aria-label="Portfolio performance placeholder chart">
                   <path d="M0 108 C42 92, 72 84, 98 86 S168 106, 204 72 S280 38, 320 40" fill="none" stroke="url(#gradient)" stroke-width="4" />
@@ -242,6 +268,26 @@
               </div>
               <div class="portfolio-stats" id="portfolio-stats"></div>
             </div>
+          </section>
+
+          <section class="card card-medium holdings-card" id="holdings">
+            <div class="card-header">
+              <div>
+                <p class="eyebrow">Holdings</p>
+                <h2>Your positions</h2>
+              </div>
+            </div>
+            <div id="holdings-list" class="watchlist-list" style="padding:0.6rem"></div>
+          </section>
+
+          <section class="card card-medium transactions-card" id="transactions">
+            <div class="card-header">
+              <div>
+                <p class="eyebrow">Transactions</p>
+                <h2>History</h2>
+              </div>
+            </div>
+            <div id="transaction-history" style="padding:0.6rem;overflow:auto;max-height:260px"></div>
           </section>
 
           <section class="card card-medium watchlist-card" id="watchlist">
@@ -262,6 +308,32 @@
               </div>
             </div>
             <ul class="news-list" id="news-list"></ul>
+          </section>
+
+          <section class="card card-large market-news-card" id="market-news">
+            <div class="card-header">
+              <div>
+                <p class="eyebrow">Market News</p>
+                <h2>Live headlines</h2>
+              </div>
+              <div class="card-actions">
+                <button class="ghost-btn" id="refresh-news-btn">Refresh News</button>
+              </div>
+            </div>
+            <div style="display:flex;justify-content:space-between;align-items:center;gap:0.6rem;margin-bottom:0.6rem;">
+              <div>
+                <span class="muted-text">Last update: </span><strong id="news-last-update">never</strong>
+              </div>
+              <div style="display:flex;gap:0.6rem;align-items:center">
+                <span id="news-loading" style="display:none;color:var(--muted)">Loading…</span>
+                <div style="text-align:right">
+                  <div><strong id="news-sentiment-label">Neutral</strong></div>
+                  <div class="muted-text" id="news-sentiment-confidence">0%</div>
+                </div>
+              </div>
+            </div>
+            <div id="market-news-list" style="display:grid;gap:0.6rem"></div>
+            <div style="margin-top:0.8rem"><span id="news-warning" class="muted-text" style="color:var(--warning);display:none">News unavailable — continuing without news analysis.</span></div>
           </section>
 
           <section class="card card-large overview-card" id="markets-overview">

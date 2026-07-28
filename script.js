@@ -37,6 +37,117 @@ const newsItems = [
   { title: 'Risk appetite holds', detail: 'Quality names continue to lead as volatility stays under control.' }
 ];
 
+// News state
+const NEWS_REFRESH_MINUTES = 15;
+let newsState = { lastUpdate: null, latest: [], sentiment: { label: 'Neutral', confidence: 50, explanation: '' }, available: false };
+
+async function fetchRssFeed(url) {
+  try {
+    // route through a free CORS proxy to avoid cross-origin restrictions
+    const proxy = 'https://api.allorigins.win/raw?url=' + encodeURIComponent(url);
+    const res = await fetch(proxy);
+    if (!res.ok) throw new Error('Network error');
+    const text = await res.text();
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(text, 'application/xml');
+    const items = Array.from(doc.querySelectorAll('item')).slice(0,10).map(i => ({
+      title: i.querySelector('title')?.textContent || '',
+      link: i.querySelector('link')?.textContent || i.querySelector('guid')?.textContent || '#',
+      source: i.querySelector('source')?.textContent || '',
+      pubDate: i.querySelector('pubDate')?.textContent || ''
+    }));
+    return items;
+  } catch (error) {
+    console.warn('fetchRssFeed failed', error);
+    return null;
+  }
+}
+
+function simpleSentimentAnalysis(headlines) {
+  // naive keyword-based sentiment: bullish words +1, bearish words -1
+  const bullish = ['rise','rises','up','gain','gains','positive','beat','beats','outperform','strong','bullish','soars','surge','surges'];
+  const bearish = ['fall','falls','down','drop','drops','negative','miss','misses','weak','bearish','plunge','plunges','decline','declines'];
+  let score = 0;
+  headlines.forEach(h => {
+    const lower = h.toLowerCase();
+    bullish.forEach(w => { if (lower.includes(w)) score += 1; });
+    bearish.forEach(w => { if (lower.includes(w)) score -= 1; });
+  });
+  const maxPossible = headlines.length * 3 || 1;
+  const norm = Math.max(-maxPossible, Math.min(maxPossible, score));
+  const pct = Math.round((Math.abs(norm) / maxPossible) * 100);
+  let label = 'Neutral';
+  if (norm > 1) label = 'Bullish';
+  else if (norm < -1) label = 'Bearish';
+  const explanation = `Headline sentiment score ${norm}/${maxPossible}`;
+  return { label, confidence: pct, explanation, score: norm };
+}
+
+async function refreshMarketNews() {
+  const listEl = document.getElementById('market-news-list');
+  const loading = document.getElementById('news-loading');
+  const lastUpdateEl = document.getElementById('news-last-update');
+  const warning = document.getElementById('news-warning');
+  const sentimentLabel = document.getElementById('news-sentiment-label');
+  const sentimentConf = document.getElementById('news-sentiment-confidence');
+
+  if (loading) loading.style.display = 'inline';
+  if (warning) warning.style.display = 'none';
+
+  // Use a public RSS: Financial Times (rss feeds are CORS restricted often). Use ''https://feeds.bbci.co.uk/news/business/rss.xml' as a free CORS-friendly option.
+  const feedUrl = 'https://feeds.bbci.co.uk/news/business/rss.xml';
+  const items = await fetchRssFeed(feedUrl);
+  if (!items) {
+    newsState.available = false;
+    if (loading) loading.style.display = 'none';
+    if (warning) warning.style.display = 'block';
+    return;
+  }
+
+  newsState.latest = items;
+  newsState.lastUpdate = Date.now();
+  newsState.available = true;
+
+  // sentiment
+  const headlines = items.map(i => i.title || '');
+  const sentiment = simpleSentimentAnalysis(headlines);
+  newsState.sentiment = sentiment;
+
+  // render
+  listEl.innerHTML = '';
+  items.forEach((it) => {
+    const row = document.createElement('div');
+    row.className = 'news-row';
+    const date = it.pubDate ? new Date(it.pubDate).toLocaleString('en-GB') : '';
+    row.innerHTML = `<div><a href="${it.link}" target="_blank" rel="noopener noreferrer">${it.title}</a><div class="muted-text">${it.source || ''} · ${date}</div></div>`;
+    listEl.appendChild(row);
+  });
+
+  if (loading) loading.style.display = 'none';
+  if (lastUpdateEl) lastUpdateEl.textContent = new Date(newsState.lastUpdate).toLocaleTimeString('en-GB', {hour:'2-digit',minute:'2-digit'});
+  if (sentimentLabel) sentimentLabel.textContent = sentiment.label;
+  if (sentimentConf) sentimentConf.textContent = `${sentiment.confidence}%`;
+
+  // Integrate with AI recommendation by slightly adjusting its confidence
+  try {
+    const aiAdjust = sentiment.score || 0;
+    // apply a modest effect: +- up to 6 confidence points
+    const adjustment = Math.max(-6, Math.min(6, aiAdjust * 2));
+    // expose to global for computeAIRecommendation to read if desired
+    window.newsSentimentAdjustment = adjustment;
+  } catch (e) {
+    window.newsSentimentAdjustment = 0;
+  }
+}
+
+// Auto-refresh news every 15 minutes
+refreshMarketNews();
+setInterval(refreshMarketNews, NEWS_REFRESH_MINUTES * 60 * 1000);
+
+// manual button
+const refreshNewsBtn = document.getElementById('refresh-news-btn');
+if (refreshNewsBtn) refreshNewsBtn.addEventListener('click', refreshMarketNews);
+
 const marketGrid = document.getElementById('market-grid');
 const tickerTrack = document.getElementById('ticker-track');
 const mobileTickerTrack = document.getElementById('mobile-ticker-track');
@@ -213,6 +324,16 @@ function computeAIRecommendation() {
     confidence = 40;
   }
 
+  // Apply small adjustment from news sentiment analysis if available
+  try {
+    const newsAdj = typeof window.newsSentimentAdjustment === 'number' ? window.newsSentimentAdjustment : 0;
+    if (newsAdj !== 0) {
+      confidence = Math.round(Math.min(100, Math.max(0, confidence + newsAdj)));
+    }
+  } catch (e) {
+    // ignore
+  }
+
   const explanationLines = [];
   if (allLive) {
     explanationLines.push(`Bitcoin moved ${btcChange >= 0 ? 'up' : 'down'} ${Math.abs(btcChange).toFixed(1)}% in the last 24h.`);
@@ -228,6 +349,17 @@ function computeAIRecommendation() {
     explanationLines.push(`Market health is ${healthScore}%.`);
     explanationLines.push(`Bitcoin change is ${Number.isFinite(btcChange) ? `${btcChange >= 0 ? 'up' : 'down'} ${Math.abs(btcChange).toFixed(1)}%` : 'unavailable'}.`);
     explanationLines.push(`Ethereum change is ${Number.isFinite(ethChange) ? `${ethChange >= 0 ? 'up' : 'down'} ${Math.abs(ethChange).toFixed(1)}%` : 'unavailable'}.`);
+  }
+
+  // add news sentiment to explanation when present
+  try {
+    if (newsState && newsState.available) {
+      explanationLines.push(`News sentiment: ${newsState.sentiment.label} (${newsState.sentiment.confidence}%)`);
+    } else {
+      explanationLines.push('News analysis unavailable; relying on market data only.');
+    }
+  } catch (e) {
+    // ignore
   }
 
   if (recommendation === 'DO NOTHING TODAY') {
@@ -682,3 +814,258 @@ refreshMarketData();
 setInterval(refreshMarketData, 300000);
 updateBriefingTime();
 animateAiScore();
+
+/** Portfolio: paper trading simulation **/
+const PORTFOLIO_KEY = 'gj_portfolio_v1';
+const STARTING_CASH = 500;
+
+function defaultPortfolio() {
+  return {
+    cash: STARTING_CASH,
+    holdings: {
+      bitcoin: { quantity: 0, avgPrice: 0 },
+      ethereum: { quantity: 0, avgPrice: 0 }
+    },
+    transactions: []
+  };
+}
+
+function loadPortfolio() {
+  try {
+    const raw = localStorage.getItem(PORTFOLIO_KEY);
+    if (!raw) return defaultPortfolio();
+    const data = JSON.parse(raw);
+    // basic validation
+    if (typeof data.cash !== 'number') return defaultPortfolio();
+    data.holdings = data.holdings || defaultPortfolio().holdings;
+    data.transactions = Array.isArray(data.transactions) ? data.transactions : [];
+    return data;
+  } catch (error) {
+    console.error('loadPortfolio', error);
+    return defaultPortfolio();
+  }
+}
+
+function savePortfolio(portfolio) {
+  try {
+    localStorage.setItem(PORTFOLIO_KEY, JSON.stringify(portfolio));
+  } catch (error) {
+    console.error('savePortfolio', error);
+  }
+}
+
+function resetPortfolio() {
+  if (!confirm('Reset portfolio? This will clear holdings and history.')) return;
+  const p = defaultPortfolio();
+  savePortfolio(p);
+  renderPortfolio();
+}
+
+function getPriceForAsset(id) {
+  const item = marketItems.find(m => m.id === id);
+  if (!item) return null;
+  const num = parseNumeric(item.value);
+  return Number.isFinite(num) ? num : null;
+}
+
+function calculatePortfolioValues(portfolio) {
+  const btcPrice = getPriceForAsset('bitcoin');
+  const ethPrice = getPriceForAsset('ethereum');
+  const holdings = portfolio.holdings;
+  let invested = 0;
+  let costBasis = 0;
+  const assets = {};
+
+  Object.keys(holdings).forEach((key) => {
+    const entry = holdings[key];
+    const qty = Number(entry.quantity) || 0;
+    const avg = Number(entry.avgPrice) || 0;
+    const price = key === 'bitcoin' ? btcPrice : ethPrice;
+    const marketValue = price && qty ? price * qty : 0;
+    const pl = marketValue - (avg * qty);
+    assets[key] = { qty, avg, price: price || null, marketValue, profitLoss: pl };
+    invested += marketValue;
+    costBasis += avg * qty;
+  });
+
+  const total = (portfolio.cash || 0) + invested;
+  const totalPL = invested - costBasis;
+  const returnPct = costBasis > 0 ? (totalPL / costBasis) * 100 : 0;
+
+  return { assets, invested, total, totalPL, returnPct, costBasis };
+}
+
+function addTransaction(portfolio, type, asset, gbpAmount, qty, price) {
+  portfolio.transactions.unshift({
+    timestamp: Date.now(),
+    type,
+    asset,
+    gbpAmount: Number(gbpAmount),
+    quantity: Number(qty),
+    price: Number(price)
+  });
+}
+
+function buyAsset(amountGbp, asset) {
+  const portfolio = loadPortfolio();
+  const price = getPriceForAsset(asset);
+  const validationEl = document.getElementById('trade-validation');
+  if (!price) { if (validationEl) validationEl.textContent = 'Live price unavailable for selected asset.'; return false; }
+  const amount = Number(amountGbp);
+  if (!isFinite(amount) || amount <= 0) { if (validationEl) validationEl.textContent = 'Enter a valid positive amount.'; return false; }
+  if (amount > portfolio.cash) { if (validationEl) validationEl.textContent = 'Insufficient cash.'; return false; }
+  const qty = amount / price;
+  if (!confirm(`Confirm buy ${formatGBP(amount)} of ${asset} at ${formatGBP(price)}?`)) return false;
+
+  // update holdings
+  const h = portfolio.holdings[asset] || { quantity: 0, avgPrice: 0 };
+  const oldCost = h.quantity * h.avgPrice;
+  const newQty = h.quantity + qty;
+  const newAvg = newQty > 0 ? (oldCost + amount) / newQty : 0;
+  portfolio.holdings[asset] = { quantity: newQty, avgPrice: newAvg };
+  portfolio.cash = Math.round((portfolio.cash - amount) * 100) / 100;
+  addTransaction(portfolio, 'BUY', asset, amount, qty, price);
+  savePortfolio(portfolio);
+  renderPortfolio();
+  if (validationEl) validationEl.textContent = '';
+  return true;
+}
+
+function sellAsset(amountGbp, asset) {
+  const portfolio = loadPortfolio();
+  const price = getPriceForAsset(asset);
+  const validationEl = document.getElementById('trade-validation');
+  if (!price) { if (validationEl) validationEl.textContent = 'Live price unavailable for selected asset.'; return false; }
+  const amount = Number(amountGbp);
+  if (!isFinite(amount) || amount <= 0) { if (validationEl) validationEl.textContent = 'Enter a valid positive amount.'; return false; }
+  const qty = amount / price;
+  const h = portfolio.holdings[asset] || { quantity: 0, avgPrice: 0 };
+  if (qty > h.quantity + 1e-12) { if (validationEl) validationEl.textContent = 'Cannot sell more than your holding.'; return false; }
+  if (!confirm(`Confirm sell ${qty.toFixed(8)} ${asset} for ${formatGBP(amount)} at ${formatGBP(price)}?`)) return false;
+
+  const remainingQty = h.quantity - qty;
+  if (remainingQty <= 1e-12) {
+    portfolio.holdings[asset] = { quantity: 0, avgPrice: 0 };
+  } else {
+    portfolio.holdings[asset] = { quantity: remainingQty, avgPrice: h.avgPrice };
+  }
+  portfolio.cash = Math.round((portfolio.cash + amount) * 100) / 100;
+  addTransaction(portfolio, 'SELL', asset, amount, qty, price);
+  savePortfolio(portfolio);
+  renderPortfolio();
+  if (validationEl) validationEl.textContent = '';
+  return true;
+}
+
+function renderPortfolio() {
+  const portfolio = loadPortfolio();
+  const vals = calculatePortfolioValues(portfolio);
+  document.getElementById('pf-total').textContent = formatGBP(vals.total);
+  document.getElementById('pf-cash').textContent = formatGBP(portfolio.cash);
+  document.getElementById('pf-invested').textContent = formatGBP(vals.invested);
+  document.getElementById('pf-pl').textContent = formatGBP(vals.totalPL);
+  document.getElementById('pf-return').textContent = `${vals.returnPct.toFixed(2)}%`;
+  document.getElementById('pf-count').textContent = Object.values(portfolio.holdings).filter(h=>h.quantity>0).length;
+
+  // holdings list
+  const holdingsList = document.getElementById('holdings-list');
+  holdingsList.innerHTML = '';
+  Object.keys(vals.assets).forEach((key) => {
+    const a = vals.assets[key];
+    const row = document.createElement('div');
+    row.className = 'watchlist-item';
+    const name = key === 'bitcoin' ? 'Bitcoin' : 'Ethereum';
+    const qty = a.qty || 0;
+    const avg = a.avg || 0;
+    const price = a.price || 0;
+    const marketValue = a.marketValue || 0;
+    const pl = a.profitLoss || 0;
+    row.innerHTML = `
+      <div>
+        <strong>${name}</strong>
+        <div class="muted-text">Qty: ${qty.toFixed(8)} · Avg ${formatGBP(avg)}</div>
+      </div>
+      <div style="text-align:right">
+        <div>${formatGBP(price || 0)}</div>
+        <div class="muted-text">${formatGBP(marketValue)} · ${formatGBP(pl)}</div>
+      </div>
+    `;
+    holdingsList.appendChild(row);
+  });
+
+  // transactions
+  const txEl = document.getElementById('transaction-history');
+  txEl.innerHTML = '';
+  portfolio.transactions.slice(0,200).forEach((tx) => {
+    const d = new Date(tx.timestamp);
+    const row = document.createElement('div');
+    row.className = 'tx-row';
+    row.innerHTML = `
+      <div style="min-width:180px">${d.toLocaleString('en-GB')}</div>
+      <div style="flex:1">${tx.type} ${tx.asset}</div>
+      <div style="min-width:140px;text-align:right">${formatGBP(tx.gbpAmount)} · ${tx.quantity.toFixed(8)} @ ${formatGBP(tx.price)}</div>
+    `;
+    txEl.appendChild(row);
+  });
+}
+
+// Wire UI buttons
+document.addEventListener('click', (e) => {
+  if (e.target && e.target.id === 'buy-btn') {
+    const asset = document.getElementById('trade-asset').value;
+    const amount = Number(document.getElementById('trade-amount').value);
+    buyAsset(amount, asset);
+  }
+  if (e.target && e.target.id === 'sell-btn') {
+    const asset = document.getElementById('trade-asset').value;
+    const amount = Number(document.getElementById('trade-amount').value);
+    sellAsset(amount, asset);
+  }
+  if (e.target && e.target.id === 'reset-portfolio') {
+    resetPortfolio();
+  }
+  if (e.target && e.target.id === 'ai-fill-btn') {
+    // Prefill based on latest AI recommendation
+    const rec = generateInvestmentRecommendation();
+    const assetSelect = document.getElementById('trade-asset');
+    const amountField = document.getElementById('trade-amount');
+    const portfolio = loadPortfolio();
+    const vals = calculatePortfolioValues(portfolio);
+    const totalValue = vals.total;
+    // parse allocation like 'Up to 5%'
+    const match = (rec.allocation || '').match(/(\d+)%/);
+    const allocPct = match ? Number(match[1]) : (rec.risk === 'High' ? 10 : 5);
+    const cap = Math.min(totalValue * (allocPct/100), portfolio.cash);
+    if (rec.recommendation === 'BUY') {
+      // choose asset based on which has stronger signal - simplistic: BTC if btc change > eth change
+      const btc = marketItems.find(m=>m.id==='bitcoin');
+      const eth = marketItems.find(m=>m.id==='ethereum');
+      const btcChange = parseNumeric(btc?.change);
+      const ethChange = parseNumeric(eth?.change);
+      const pick = (btcChange || 0) >= (ethChange || 0) ? 'bitcoin' : 'ethereum';
+      assetSelect.value = pick;
+      amountField.value = cap > 0 ? cap.toFixed(2) : '';
+    } else if (rec.recommendation === 'SELL') {
+      // prefill amount as max sellable for selected asset
+      const pick = assetSelect.value;
+      const assetVals = vals.assets[pick] || { marketValue: 0 };
+      amountField.value = assetVals.marketValue ? assetVals.marketValue.toFixed(2) : '';
+    }
+  }
+});
+
+// Ensure portfolio renders after market updates
+function onMarketRefreshed() {
+  renderPortfolio();
+}
+
+// hook into the existing refresh path
+const originalRefresh = refreshMarketData;
+refreshMarketData = async function() {
+  const result = await originalRefresh();
+  onMarketRefreshed();
+  return result;
+};
+
+// initial render
+renderPortfolio();

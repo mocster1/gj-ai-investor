@@ -704,6 +704,31 @@ svg {
   flex: 1;
 }
 
+.portfolio-summary {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0,1fr));
+  gap: 0.6rem;
+  align-items: center;
+}
+
+.portfolio-metric span{ display:block; color:var(--muted); font-size:0.82rem }
+.portfolio-metric strong{ display:block; font-size:1rem }
+
+.trade-controls select, .trade-controls input { padding:0.6rem; border-radius:8px; border:1px solid var(--border); background:transparent; color:var(--text) }
+.trade-controls button { min-height:44px }
+
+#holdings-list .watchlist-item { display:flex; justify-content:space-between; gap:0.6rem }
+
+.transactions-card #transaction-history .tx-row { display:flex; justify-content:space-between; gap:0.6rem; padding:0.45rem; border-bottom:1px dashed rgba(255,255,255,0.04) }
+
+@media (max-width: 600px) {
+  .portfolio-body { grid-template-columns: 1fr; }
+  .portfolio-summary { grid-template-columns: repeat(2, 1fr); }
+  .trade-controls { display:flex; flex-direction:column; gap:0.6rem }
+  .trade-controls div[style] { flex-direction:column; }
+  .trade-controls button, .trade-controls input, .trade-controls select { width:100% }
+}
+
 .portfolio-chart {
   border-radius: 1rem;
   padding: 0.8rem;
@@ -758,6 +783,15 @@ svg {
   justify-content: space-between;
   align-items: center;
   gap: 0.7rem;
+}
+
+.market-news-card #market-news-list .news-row { padding:0.6rem; border-radius:0.75rem; background:rgba(255,255,255,0.02); border:1px solid rgba(255,255,255,0.03)}
+.market-news-card .muted-text { color:var(--muted) }
+.market-news-card a { color:var(--accent) }
+
+@media (max-width: 600px) {
+  .market-news-card { order: 10 }
+  #market-news { margin-top: 0.6rem }
 }
 
 .watchlist-item strong {
