@@ -3,136 +3,235 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="description" content="GJ AI Investor demo app for a £500 paper portfolio with market intelligence and heating oil tracking." />
-    <title>GJ AI Investor</title>
+    <meta name="description" content="GJ AI Investor dashboard layout" />
+    <title>GJ AI Wealth</title>
     <link rel="stylesheet" href="style.css" />
   </head>
   <body>
-    <header class="topbar">
-      <div class="brand">
-        <div class="brand-mark">GJ</div>
-        <div>
-          <strong>GJ AI Investor</strong>
-          <span>Demo portfolio intelligence</span>
+    <div class="app-shell">
+      <aside class="sidebar" aria-label="Primary navigation">
+        <div class="brand-block">
+          <div class="brand-mark">GJ</div>
+          <div>
+            <p class="brand-title">GJ AI Wealth</p>
+            <p class="brand-subtitle">Operating System</p>
+          </div>
         </div>
-      </div>
-      <div class="status-pill" id="last-updated">Demo data ready</div>
-    </header>
 
-    <main class="page-shell">
-      <section class="hero card" aria-labelledby="hero-title">
-        <div>
-          <span class="eyebrow">Premium demo dashboard</span>
-          <h1 id="hero-title">Protect capital. Grow wealth. Explain every decision.</h1>
-          <p>
-            This prototype presents a clean banking-style view of a £500 paper portfolio with clear signals, risk framing, and a practical fuel tracker for SA66 7UZ.
-          </p>
-          <div class="hero-metrics" aria-label="Portfolio highlights">
-            <article>
-              <span>Paper portfolio</span>
+        <nav class="sidebar-nav">
+          <a class="nav-item active" href="#dashboard"><span>◉</span><span>Dashboard</span></a>
+          <a class="nav-item" href="#briefing"><span>◌</span><span>Morning Briefing</span></a>
+          <a class="nav-item" href="#markets"><span>◌</span><span>Markets</span></a>
+          <a class="nav-item" href="#advisor"><span>◌</span><span>AI Advisor</span></a>
+          <a class="nav-item" href="#portfolio"><span>◌</span><span>Portfolio</span></a>
+          <a class="nav-item" href="#watchlist"><span>◌</span><span>Watchlist</span></a>
+          <a class="nav-item" href="#news"><span>◌</span><span>News Intelligence</span></a>
+          <a class="nav-item" href="#oil"><span>◌</span><span>Heating Oil</span></a>
+          <a class="nav-item" href="#portfolio"><span>◌</span><span>Wealth</span></a>
+          <a class="nav-item" href="#settings"><span>◌</span><span>Settings</span></a>
+        </nav>
+
+        <div class="sidebar-foot">
+          <p>Demo data</p>
+          <span>Private research mode</span>
+        </div>
+      </aside>
+
+      <div class="main-panel">
+        <header class="topbar">
+          <div>
+            <p class="topbar-label">AI Wealth OS</p>
+            <h1>GJ AI Wealth</h1>
+          </div>
+          <div class="topbar-actions">
+            <div class="topbar-pill">
+              <span>Portfolio Value</span>
               <strong>£500.00</strong>
-            </article>
-            <article>
-              <span>Cash reserve</span>
-              <strong>£125.00</strong>
-            </article>
-            <article>
-              <span>Today</span>
-              <strong id="today">Loading…</strong>
-            </article>
+            </div>
+            <div class="topbar-pill">
+              <span>Market Status</span>
+              <strong>Steady</strong>
+            </div>
+            <button class="icon-btn" type="button" aria-label="Notifications">🔔</button>
+            <button class="icon-btn" type="button" aria-label="Settings">⚙</button>
           </div>
-        </div>
+        </header>
 
-        <aside class="recommendation-card" aria-labelledby="recommendation-title">
-          <p class="label">Recommendation</p>
-          <h2 id="recommendation-title">BUY</h2>
-          <p class="summary">A disciplined entry is justified because the risk-adjusted setup is improving and volatility remains manageable.</p>
-          <div class="recommendation-meta">
-            <div>
-              <span>Confidence</span>
-              <strong>82%</strong>
+        <main class="dashboard-grid" id="dashboard">
+          <section class="card card-large briefing-card" id="briefing">
+            <div class="card-header">
+              <div>
+                <p class="eyebrow">Morning Briefing</p>
+                <h2>Good morning, Gerallt</h2>
+              </div>
+              <div class="card-actions">
+                <span class="status-pill success">No action required</span>
+                <button class="ghost-btn" type="button" data-briefing-refresh>Refresh briefing</button>
+              </div>
             </div>
-            <div>
-              <span>Risk</span>
-              <strong>Moderate</strong>
-            </div>
-            <div>
-              <span>Exit plan</span>
-              <strong>Trail stop</strong>
-            </div>
-          </div>
-        </aside>
-      </section>
+            <p class="briefing-time" id="briefing-time">Updated just now</p>
+            <p class="briefing-summary">
+              FTSE 100 positive, S&amp;P 500 positive, Bitcoin weaker overnight, Brent oil rising, and no urgent portfolio action. Heating oil prices still await live supplier quotes.
+            </p>
+          </section>
 
-      <section class="section-row" aria-label="Market overview">
-        <article class="section-card card">
-          <div class="section-heading">
-            <div>
-              <h2>Market cards</h2>
-              <p>Demo data for now. High-importance alerts only.</p>
+          <section class="card card-medium recommendation-card" id="advisor">
+            <div class="card-header">
+              <div>
+                <p class="eyebrow">AI Recommendation</p>
+                <h2>BUY</h2>
+              </div>
+              <div class="gauge confidence-gauge" aria-label="AI score gauge">
+                <div class="gauge-inner">
+                  <strong id="ai-score-value">0</strong>
+                  <span>AI Score</span>
+                </div>
+              </div>
             </div>
-            <button class="refresh-btn" type="button" data-refresh>Refresh demo</button>
-          </div>
-          <div class="market-grid" id="market-grid"></div>
-        </article>
-      </section>
-
-      <section class="section-row" aria-label="Fuel tracker and wealth overview">
-        <article class="section-card card">
-          <div class="section-heading">
-            <div>
-              <h2>Heating oil tracker</h2>
-              <p>500 litres • SA66 7UZ • high-importance alerts only</p>
+            <div class="recommendation-details">
+              <div class="detail-item">
+                <span>Confidence</span>
+                <strong>82%</strong>
+              </div>
+              <div class="detail-item">
+                <span>Risk</span>
+                <strong>Moderate</strong>
+              </div>
+              <div class="detail-item">
+                <span>Allocation</span>
+                <strong>12%</strong>
+              </div>
+              <div class="detail-item">
+                <span>Stop loss</span>
+                <strong>£4.70</strong>
+              </div>
+              <div class="detail-item">
+                <span>Profit target</span>
+                <strong>£5.25</strong>
+              </div>
+              <div class="detail-item">
+                <span>Updated</span>
+                <strong>09:42</strong>
+              </div>
             </div>
-          </div>
-          <div class="oil-grid">
-            <article class="oil-card">
-              <h3>DJ Davies Fuels</h3>
-              <div class="metric">Awaiting live quote</div>
-              <p class="meta">Always included in the comparison view</p>
-            </article>
-            <article class="oil-card">
-              <h3>BoilerJuice</h3>
-              <div class="metric">Awaiting live quote</div>
-              <p class="meta">Comparison partner for delivery pricing</p>
-            </article>
-            <article class="oil-card">
-              <h3>Local suppliers</h3>
-              <div class="metric">Awaiting live quote</div>
-              <p class="meta">Delivered price incl. VAT</p>
-            </article>
-          </div>
-        </article>
+            <p class="reason">Demo explanation: Momentum is improving while drawdown stays controlled, supporting a measured entry.</p>
+          </section>
 
-        <article class="section-card card">
-          <div class="section-heading">
-            <div>
-              <h2>GJ Wealth</h2>
-              <p>Cash, investments, pensions and property snapshot</p>
+          <section class="card card-medium market-health-card" id="markets">
+            <div class="card-header">
+              <div>
+                <p class="eyebrow">Market Health</p>
+                <h2>Stable</h2>
+              </div>
             </div>
-          </div>
-          <div class="wealth-grid" id="wealth-grid"></div>
-        </article>
-      </section>
-
-      <section class="section-row" aria-label="Alerts">
-        <article class="section-card card">
-          <div class="section-heading">
-            <div>
-              <h2>High-importance alerts</h2>
-              <p>Only the most relevant market events are surfaced here.</p>
+            <div class="gauge market-gauge" aria-label="Market health gauge">
+              <div class="gauge-inner">
+                <strong>74%</strong>
+                <span>healthy</span>
+              </div>
             </div>
-          </div>
-          <ul class="alerts-list">
-            <li>Geopolitical tension remains a key risk for energy and defensive positioning.</li>
-            <li>Higher oil costs could pressure transport and consumer spending.</li>
-            <li>Macro policy updates should be monitored before enlarging risk.</li>
-          </ul>
-        </article>
-      </section>
-    </main>
+            <p class="muted-text">Volatility remains contained and quality names are leading the move.</p>
+          </section>
 
-    <p class="footer-note">Prototype only. Market figures shown here are demonstration data and are not investment advice.</p>
+          <section class="card card-large portfolio-card" id="portfolio">
+            <div class="card-header">
+              <div>
+                <p class="eyebrow">Portfolio</p>
+                <h2>Performance</h2>
+              </div>
+              <span class="status-pill">Demo values</span>
+            </div>
+            <div class="portfolio-body">
+              <div class="portfolio-chart" aria-label="Portfolio performance chart">
+                <svg viewBox="0 0 320 140" role="img" aria-label="Portfolio performance placeholder chart">
+                  <path d="M0 108 C42 92, 72 84, 98 86 S168 106, 204 72 S280 38, 320 40" fill="none" stroke="url(#gradient)" stroke-width="4" />
+                  <defs>
+                    <linearGradient id="gradient" x1="0%" y1="0%" x2="100%" y2="0%">
+                      <stop offset="0%" stop-color="#4cc9f0" />
+                      <stop offset="100%" stop-color="#7c3aed" />
+                    </linearGradient>
+                  </defs>
+                </svg>
+              </div>
+              <div class="portfolio-stats" id="portfolio-stats"></div>
+            </div>
+          </section>
+
+          <section class="card card-medium watchlist-card" id="watchlist">
+            <div class="card-header">
+              <div>
+                <p class="eyebrow">Watchlist</p>
+                <h2>Momentum names</h2>
+              </div>
+            </div>
+            <div class="watchlist-list" id="watchlist-list"></div>
+          </section>
+
+          <section class="card card-medium news-card" id="news">
+            <div class="card-header">
+              <div>
+                <p class="eyebrow">Latest High Impact News</p>
+                <h2>Signals</h2>
+              </div>
+            </div>
+            <ul class="news-list" id="news-list"></ul>
+          </section>
+
+          <section class="card card-large overview-card" id="markets-overview">
+            <div class="card-header">
+              <div>
+                <p class="eyebrow">Market Overview</p>
+                <h2>World markets</h2>
+              </div>
+              <button class="ghost-btn" type="button" data-refresh>Refresh demo</button>
+            </div>
+            <div class="markets-grid" id="market-grid"></div>
+          </section>
+
+          <section class="card card-medium oil-card" id="oil">
+            <div class="card-header">
+              <div>
+                <p class="eyebrow">Heating Oil</p>
+                <h2>Preview</h2>
+              </div>
+              <span class="status-pill">Demo</span>
+            </div>
+            <div class="oil-preview">
+              <div class="oil-price">£1.38/l</div>
+              <p class="muted-text">Today’s price</p>
+              <div class="oil-meta">
+                <div>
+                  <span>30-day trend</span>
+                  <strong>+4.8%</strong>
+                </div>
+                <div>
+                  <span>Best supplier</span>
+                  <strong>DJ Davies Fuels</strong>
+                </div>
+              </div>
+              <div class="oil-footer">
+                <span>Buy today?</span>
+                <strong>Yes</strong>
+              </div>
+            </div>
+          </section>
+
+          <section class="card card-medium alerts-card" id="settings">
+            <div class="card-header">
+              <div>
+                <p class="eyebrow">High Impact Alerts</p>
+                <h2>Priority notices</h2>
+              </div>
+            </div>
+            <ul class="alerts-list">
+              <li>Oil supply concerns remain elevated.</li>
+              <li>Macro policy moves need monitoring.</li>
+              <li>Market breadth remains constructive.</li>
+            </ul>
+          </section>
+        </main>
+      </div>
+    </div>
 
     <script src="script.js"></script>
   </body>
