@@ -43,8 +43,10 @@ const tickerItems = [
 
 const marketGrid = document.getElementById('market-grid');
 const tickerTrack = document.getElementById('ticker-track');
+const mobileTickerTrack = document.getElementById('mobile-ticker-track');
 const sidebar = document.querySelector('.sidebar');
 const navToggle = document.querySelector('.mobile-nav-toggle');
+const mobileDrawer = document.getElementById('mobile-drawer-nav');
 const portfolioStats = document.getElementById('portfolio-stats');
 const watchlistList = document.getElementById('watchlist-list');
 const newsList = document.getElementById('news-list');
@@ -113,18 +115,22 @@ function renderNews() {
 }
 
 function renderTicker() {
-  if (!tickerTrack) {
-    return;
-  }
-
   const repeatedItems = [...tickerItems, ...tickerItems];
-  tickerTrack.innerHTML = repeatedItems.map((item) => `
+  const tickerMarkup = repeatedItems.map((item) => `
     <div class="ticker-item">
       <span class="ticker-name">${item.name}</span>
       <span class="ticker-value">${item.value}</span>
       <span class="ticker-change ${item.direction === 'down' ? 'negative' : 'positive'}">${item.change}</span>
     </div>
   `).join('');
+
+  if (tickerTrack) {
+    tickerTrack.innerHTML = tickerMarkup;
+  }
+
+  if (mobileTickerTrack) {
+    mobileTickerTrack.innerHTML = tickerMarkup;
+  }
 }
 
 function updateBriefingTime() {
@@ -154,10 +160,52 @@ function animateAiScore() {
   requestAnimationFrame(step);
 }
 
-if (navToggle && sidebar) {
-  navToggle.addEventListener('click', () => {
-    const isOpen = sidebar.classList.toggle('is-open');
-    navToggle.setAttribute('aria-expanded', String(isOpen));
+function openMobileDrawer() {
+  if (!sidebar || !navToggle || !mobileDrawer) {
+    return;
+  }
+
+  sidebar.classList.add('is-open');
+  navToggle.setAttribute('aria-expanded', 'true');
+}
+
+function closeMobileDrawer() {
+  if (!sidebar || !navToggle || !mobileDrawer) {
+    return;
+  }
+
+  sidebar.classList.remove('is-open');
+  navToggle.setAttribute('aria-expanded', 'false');
+}
+
+if (navToggle && sidebar && mobileDrawer) {
+  navToggle.addEventListener('click', (event) => {
+    event.stopPropagation();
+    const isOpen = sidebar.classList.contains('is-open');
+    if (isOpen) {
+      closeMobileDrawer();
+    } else {
+      openMobileDrawer();
+    }
+  });
+
+  mobileDrawer.querySelectorAll('a').forEach((link) => {
+    link.addEventListener('click', () => {
+      closeMobileDrawer();
+    });
+  });
+
+  document.addEventListener('click', (event) => {
+    const clickedInside = sidebar.contains(event.target);
+    if (!clickedInside && sidebar.classList.contains('is-open')) {
+      closeMobileDrawer();
+    }
+  });
+
+  document.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape') {
+      closeMobileDrawer();
+    }
   });
 }
 
