@@ -16,9 +16,14 @@
             <p class="brand-title">GJ AI Wealth</p>
             <p class="brand-subtitle">Operating System</p>
           </div>
+          <button class="mobile-nav-toggle" type="button" aria-expanded="false" aria-controls="sidebar-nav" aria-label="Toggle navigation">
+            <span></span>
+            <span></span>
+            <span></span>
+          </button>
         </div>
 
-        <nav class="sidebar-nav">
+        <nav class="sidebar-nav" id="sidebar-nav">
           <a class="nav-item active" href="#dashboard"><span class="nav-dot">●</span><span>Dashboard</span></a>
           <a class="nav-item" href="#briefing"><span class="nav-dot">○</span><span>Morning Briefing</span></a>
           <a class="nav-item" href="#markets"><span class="nav-dot">○</span><span>Markets</span></a>
@@ -119,6 +124,52 @@
               </div>
             </div>
             <p class="reason">Demo explanation: Momentum is improving while drawdown stays controlled, supporting a measured entry.</p>
+            <button class="explanation-toggle" type="button" data-explanation-toggle aria-expanded="false" aria-controls="recommendation-explanation">
+              Why?
+            </button>
+            <div class="explanation-panel" id="recommendation-explanation" aria-hidden="true">
+              <div class="explanation-body">
+                <div class="explanation-grid">
+                  <div class="explanation-block">
+                    <span class="explanation-label">Recommendation</span>
+                    <strong>BUY</strong>
+                  </div>
+                  <div class="explanation-block">
+                    <span class="explanation-label">Confidence</span>
+                    <strong>82%</strong>
+                  </div>
+                </div>
+
+                <div class="explanation-section">
+                  <span class="explanation-label">Reasoning</span>
+                  <ul class="explanation-list">
+                    <li>Market trend is strengthening.</li>
+                    <li>Volatility remains within acceptable limits.</li>
+                    <li>Market breadth has improved over the last five sessions.</li>
+                    <li>Oil prices are rising but not enough to change the recommendation.</li>
+                    <li>No major macroeconomic risks have been identified today.</li>
+                  </ul>
+                </div>
+
+                <div class="explanation-grid">
+                  <div class="explanation-block">
+                    <span class="explanation-label">Risk Assessment</span>
+                    <strong>Moderate</strong>
+                  </div>
+                  <div class="explanation-block">
+                    <span class="explanation-label">Suggested Allocation</span>
+                    <strong>3% of portfolio</strong>
+                  </div>
+                </div>
+
+                <div class="explanation-section">
+                  <span class="explanation-label">Suggested Exit Strategy</span>
+                  <p class="explanation-copy">Trail stop at 8%</p>
+                </div>
+
+                <p class="disclaimer">AI recommendations are informational only and are not financial advice.</p>
+              </div>
+            </div>
           </section>
 
           <section class="card card-medium market-health-card" id="markets">

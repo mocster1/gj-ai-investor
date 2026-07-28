@@ -43,6 +43,8 @@ const tickerItems = [
 
 const marketGrid = document.getElementById('market-grid');
 const tickerTrack = document.getElementById('ticker-track');
+const sidebar = document.querySelector('.sidebar');
+const navToggle = document.querySelector('.mobile-nav-toggle');
 const portfolioStats = document.getElementById('portfolio-stats');
 const watchlistList = document.getElementById('watchlist-list');
 const newsList = document.getElementById('news-list');
@@ -50,6 +52,9 @@ const refreshButton = document.querySelector('[data-refresh]');
 const briefingRefreshButton = document.querySelector('[data-briefing-refresh]');
 const briefingTime = document.getElementById('briefing-time');
 const aiScoreValue = document.getElementById('ai-score-value');
+const explanationToggle = document.querySelector('[data-explanation-toggle]');
+const explanationPanel = document.getElementById('recommendation-explanation');
+const explanationStorageKey = 'gj-ai-why-open';
 
 function renderMarkets() {
   marketGrid.innerHTML = '';
@@ -147,6 +152,49 @@ function animateAiScore() {
   };
 
   requestAnimationFrame(step);
+}
+
+if (navToggle && sidebar) {
+  navToggle.addEventListener('click', () => {
+    const isOpen = sidebar.classList.toggle('is-open');
+    navToggle.setAttribute('aria-expanded', String(isOpen));
+  });
+}
+
+function setExplanationState(isOpen) {
+  if (!explanationToggle || !explanationPanel) {
+    return;
+  }
+
+  explanationToggle.setAttribute('aria-expanded', String(isOpen));
+  explanationPanel.classList.toggle('is-open', isOpen);
+  explanationPanel.setAttribute('aria-hidden', String(!isOpen));
+
+  try {
+    sessionStorage.setItem(explanationStorageKey, String(isOpen));
+  } catch (error) {
+    console.warn('Unable to persist explanation panel state', error);
+  }
+}
+
+if (explanationToggle && explanationPanel) {
+  explanationToggle.addEventListener('click', () => {
+    const isOpen = explanationToggle.getAttribute('aria-expanded') !== 'true';
+    setExplanationState(isOpen);
+  });
+
+  let storedState = null;
+  try {
+    storedState = sessionStorage.getItem(explanationStorageKey);
+  } catch (error) {
+    console.warn('Unable to read explanation panel state', error);
+  }
+
+  if (storedState === 'true') {
+    setExplanationState(true);
+  } else {
+    setExplanationState(false);
+  }
 }
 
 if (refreshButton) {
