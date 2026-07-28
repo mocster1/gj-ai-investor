@@ -957,18 +957,28 @@ svg {
   .dashboard-grid {
     grid-template-columns: 1fr;
     gap: 0.7rem;
+    grid-auto-rows: auto;
+    align-items: start;
+  }
+
+  .dashboard-grid > .card {
+    align-self: start;
   }
 
   .card {
     min-height: auto;
-    padding: 0.85rem;
+    height: auto;
+    padding: 1.2rem;
     border-radius: 1rem;
   }
 
   .card-large,
   .card-medium,
-  .recommendation-card {
+  .recommendation-card,
+  .market-health-card,
+  .portfolio-card {
     grid-column: 1 / -1;
+    height: auto;
   }
 
   .card-header {
