@@ -151,6 +151,145 @@ function updateMarketItem(id, updates) {
   Object.assign(item, updates);
 }
 
+function parseNumeric(value) {
+  if (typeof value === 'number') {
+    return value;
+  }
+  if (typeof value !== 'string') {
+    return NaN;
+  }
+  return Number(value.replace(/[£$,%]/g, '').trim());
+}
+
+function getMarketHealthScore() {
+  const healthElement = document.querySelector('.market-gauge strong');
+  const raw = healthElement?.textContent || '';
+  const value = parseNumeric(raw);
+  return Number.isFinite(value) ? value : 0;
+}
+
+function computeAIRecommendation() {
+  const bitcoin = marketItems.find((item) => item.id === 'bitcoin');
+  const ethereum = marketItems.find((item) => item.id === 'ethereum');
+  const gbpUsd = marketItems.find((item) => item.id === 'gbpUsd');
+  const healthScore = getMarketHealthScore();
+
+  const btcChange = parseNumeric(bitcoin?.change);
+  const ethChange = parseNumeric(ethereum?.change);
+  const gbpUsdValue = parseNumeric(gbpUsd?.value);
+  const gbpUsdMovement = Number.isFinite(gbpUsdValue) ? ((gbpUsdValue - 1.27) / 1.27) * 100 : 0;
+
+  const volatility = Math.max(Math.abs(btcChange || 0), Math.abs(ethChange || 0));
+  const sentiment = (btcChange || 0) * 0.4 + (ethChange || 0) * 0.4 + gbpUsdMovement * 0.2 + (healthScore - 50) * 0.1;
+  const allLive = liveState.bitcoin && liveState.ethereum && liveState.gbpUsd;
+  const partialLive = [liveState.bitcoin, liveState.ethereum, liveState.gbpUsd].filter(Boolean).length > 0;
+
+  let recommendation = 'HOLD';
+  if (!allLive && !partialLive) {
+    recommendation = 'DO NOTHING TODAY';
+  } else if (sentiment >= 4 && healthScore >= 60 && volatility < 6) {
+    recommendation = 'BUY';
+  } else if (sentiment >= 0 && healthScore >= 50) {
+    recommendation = 'HOLD';
+  } else if (sentiment <= -4 || volatility >= 8) {
+    recommendation = 'SELL';
+  } else {
+    recommendation = 'DO NOTHING TODAY';
+  }
+
+  let risk = 'Medium';
+  if (volatility < 3 && healthScore >= 65 && sentiment >= 2) {
+    risk = 'Low';
+  } else if (volatility >= 6 || healthScore < 50) {
+    risk = 'High';
+  }
+
+  let allocation = risk === 'Low' ? 'Up to 5%' : 'Up to 10%';
+  let stopLoss = risk === 'Low' ? '3%' : risk === 'Medium' ? '6%' : '10%';
+  let review = risk === 'Low' ? 'Next Week' : risk === 'Medium' ? 'This Week' : 'Tomorrow';
+
+  let confidence = Math.round(Math.min(100, Math.max(20, 50 + sentiment * 4 - volatility * 2 + (healthScore - 50) * 0.5)));
+  if (!Number.isFinite(confidence)) {
+    confidence = 40;
+  }
+
+  const explanationLines = [];
+  if (allLive) {
+    explanationLines.push(`Bitcoin moved ${btcChange >= 0 ? 'up' : 'down'} ${Math.abs(btcChange).toFixed(1)}% in the last 24h.`);
+    explanationLines.push(`Ethereum moved ${ethChange >= 0 ? 'up' : 'down'} ${Math.abs(ethChange).toFixed(1)}% in the last 24h.`);
+    explanationLines.push(`GBP/USD moved ${gbpUsdMovement >= 0 ? 'up' : 'down'} ${Math.abs(gbpUsdMovement).toFixed(2)}% relative to the baseline.`);
+    explanationLines.push(`Market health is ${healthScore}%, which suggests ${healthScore >= 60 ? 'a positive' : 'a cautious'} environment.`);
+    explanationLines.push(`Volatility is ${volatility.toFixed(1)}%, which is considered ${volatility < 4 ? 'low' : volatility < 7 ? 'moderate' : 'high'}.`);
+  } else {
+    explanationLines.push('Live market data is partially unavailable, so the engine is using fallback demo values.');
+    if (partialLive) {
+      explanationLines.push('Some live values are present, but the recommendation is still conservative.');
+    }
+    explanationLines.push(`Market health is ${healthScore}%.`);
+    explanationLines.push(`Bitcoin change is ${Number.isFinite(btcChange) ? `${btcChange >= 0 ? 'up' : 'down'} ${Math.abs(btcChange).toFixed(1)}%` : 'unavailable'}.`);
+    explanationLines.push(`Ethereum change is ${Number.isFinite(ethChange) ? `${ethChange >= 0 ? 'up' : 'down'} ${Math.abs(ethChange).toFixed(1)}%` : 'unavailable'}.`);
+  }
+
+  if (recommendation === 'DO NOTHING TODAY') {
+    explanationLines.push('The engine prefers to wait for clearer live signals before taking action.');
+  }
+
+  return {
+    recommendation,
+    confidence,
+    risk,
+    allocation,
+    stopLoss,
+    review,
+    reason: allLive ? 'The rule-based engine analyzed live price movement, FX flow and market health to set a recommendation.' : 'This recommendation is based on fallback demo values while live feed is unavailable.',
+    explanationLines,
+    liveData: allLive,
+    partialLive
+  };
+}
+
+function updateAIRecommendationUI() {
+  const title = document.getElementById('recommendation-title');
+  const confidence = document.getElementById('ai-confidence');
+  const risk = document.getElementById('ai-risk');
+  const allocation = document.getElementById('ai-allocation');
+  const stopLoss = document.getElementById('ai-stop-loss');
+  const review = document.getElementById('ai-review');
+  const reason = document.getElementById('recommendation-reason');
+  const updated = document.getElementById('recommendation-updated');
+  const explanationTitle = document.getElementById('explanation-title');
+  const explanationConfidence = document.getElementById('explanation-confidence');
+  const explanationRisk = document.getElementById('explanation-risk');
+  const explanationAllocation = document.getElementById('explanation-allocation');
+  const explanationExit = document.getElementById('explanation-exit');
+  const reasonList = document.getElementById('recommendation-reason-list');
+
+  const results = computeAIRecommendation();
+  const now = new Date();
+
+  if (title) title.textContent = results.recommendation;
+  if (confidence) confidence.textContent = `${results.confidence}%`;
+  if (risk) risk.textContent = results.risk;
+  if (allocation) allocation.textContent = results.allocation;
+  if (stopLoss) stopLoss.textContent = results.stopLoss;
+  if (review) review.textContent = results.review;
+  if (reason) reason.textContent = results.reason;
+  if (updated) updated.textContent = now.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+  if (explanationTitle) explanationTitle.textContent = results.recommendation;
+  if (explanationConfidence) explanationConfidence.textContent = `${results.confidence}%`;
+  if (explanationRisk) explanationRisk.textContent = results.risk;
+  if (explanationAllocation) explanationAllocation.textContent = results.allocation;
+  if (explanationExit) explanationExit.textContent = `Stop loss set at ${results.stopLoss}`;
+
+  if (reasonList) {
+    reasonList.innerHTML = results.explanationLines.map((line) => `<li>${line}</li>`).join('');
+  }
+}
+
+function runAIRecommendation() {
+  updateAIRecommendationUI();
+}
+
 function updateLiveStatusDisplay() {
   const liveStatusPill = document.getElementById('live-status-pill');
   const liveStatusCopy = document.getElementById('live-status-copy');
@@ -267,6 +406,7 @@ async function refreshMarketData() {
   renderMarkets();
   renderTicker();
   updateLiveStatusDisplay();
+  runAIRecommendation();
 
   if (refreshButton) {
     refreshButton.disabled = false;
@@ -474,6 +614,7 @@ renderTicker();
 setupTickerInteraction(document.querySelector('.market-ticker'));
 setupTickerInteraction(document.querySelector('.mobile-market-ticker'));
 updateLiveStatusDisplay();
+runAIRecommendation();
 refreshMarketData();
 setInterval(refreshMarketData, 300000);
 updateBriefingTime();

@@ -104,7 +104,7 @@
             <div class="card-header">
               <div>
                 <p class="eyebrow">AI Recommendation</p>
-                <h2>BUY</h2>
+                <h2 id="recommendation-title">BUY</h2>
               </div>
               <div class="gauge confidence-gauge" aria-label="AI score gauge">
                 <div class="gauge-inner">
@@ -116,49 +116,49 @@
             <div class="recommendation-details">
               <div class="detail-item">
                 <span>Confidence</span>
-                <strong>82%</strong>
+                <strong id="ai-confidence">82%</strong>
               </div>
               <div class="detail-item">
                 <span>Risk</span>
-                <strong>Moderate</strong>
+                <strong id="ai-risk">Moderate</strong>
               </div>
               <div class="detail-item">
                 <span>Allocation</span>
-                <strong>12%</strong>
+                <strong id="ai-allocation">12%</strong>
               </div>
               <div class="detail-item">
                 <span>Stop loss</span>
-                <strong>£4.70</strong>
+                <strong id="ai-stop-loss">4.7%</strong>
               </div>
               <div class="detail-item">
-                <span>Profit target</span>
-                <strong>£5.25</strong>
+                <span>Review</span>
+                <strong id="ai-review">This Week</strong>
               </div>
               <div class="detail-item">
                 <span>Updated</span>
-                <strong>09:42</strong>
+                <strong id="recommendation-updated">09:42</strong>
               </div>
             </div>
-            <p class="reason">Demo explanation: Momentum is improving while drawdown stays controlled, supporting a measured entry.</p>
+            <p class="reason" id="recommendation-reason">Demo explanation: Momentum is improving while drawdown stays controlled, supporting a measured entry.</p>
             <button class="explanation-toggle" type="button" data-explanation-toggle aria-expanded="false" aria-controls="recommendation-explanation">
               Why?
             </button>
             <div class="explanation-panel" id="recommendation-explanation" aria-hidden="true">
               <div class="explanation-body">
-                <div class="explanation-grid">
+                    <div class="explanation-grid">
                   <div class="explanation-block">
                     <span class="explanation-label">Recommendation</span>
-                    <strong>BUY</strong>
+                    <strong id="explanation-title">BUY</strong>
                   </div>
                   <div class="explanation-block">
                     <span class="explanation-label">Confidence</span>
-                    <strong>82%</strong>
+                    <strong id="explanation-confidence">82%</strong>
                   </div>
                 </div>
 
                 <div class="explanation-section">
                   <span class="explanation-label">Reasoning</span>
-                  <ul class="explanation-list">
+                  <ul class="explanation-list" id="recommendation-reason-list">
                     <li>Market trend is strengthening.</li>
                     <li>Volatility remains within acceptable limits.</li>
                     <li>Market breadth has improved over the last five sessions.</li>
@@ -170,17 +170,17 @@
                 <div class="explanation-grid">
                   <div class="explanation-block">
                     <span class="explanation-label">Risk Assessment</span>
-                    <strong>Moderate</strong>
+                    <strong id="explanation-risk">Moderate</strong>
                   </div>
                   <div class="explanation-block">
                     <span class="explanation-label">Suggested Allocation</span>
-                    <strong>3% of portfolio</strong>
+                    <strong id="explanation-allocation">3% of portfolio</strong>
                   </div>
                 </div>
 
                 <div class="explanation-section">
                   <span class="explanation-label">Suggested Exit Strategy</span>
-                  <p class="explanation-copy">Trail stop at 8%</p>
+                  <p class="explanation-copy" id="explanation-exit">Trail stop at 8%</p>
                 </div>
 
                 <p class="disclaimer">AI recommendations are informational only and are not financial advice.</p>
