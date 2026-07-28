@@ -29,7 +29,20 @@ const newsItems = [
   { title: 'Risk appetite holds', detail: 'Quality names continue to lead as volatility stays under control.' }
 ];
 
+const tickerItems = [
+  { name: 'FTSE 100', value: '8,210', change: '+0.4%', direction: 'up' },
+  { name: 'S&P 500', value: '6,180', change: '+0.7%', direction: 'up' },
+  { name: 'NASDAQ', value: '20,340', change: '+1.1%', direction: 'up' },
+  { name: 'Bitcoin', value: '£91,420', change: '-1.8%', direction: 'down' },
+  { name: 'Ethereum', value: '£3,240', change: '+0.6%', direction: 'up' },
+  { name: 'Gold', value: '£2,640', change: '+0.1%', direction: 'up' },
+  { name: 'Silver', value: '£29.40', change: '-0.3%', direction: 'down' },
+  { name: 'Brent Oil', value: '$78.40', change: '+2.3%', direction: 'up' },
+  { name: 'GBP/USD', value: '1.27', change: '+0.2%', direction: 'up' }
+];
+
 const marketGrid = document.getElementById('market-grid');
+const tickerTrack = document.getElementById('ticker-track');
 const portfolioStats = document.getElementById('portfolio-stats');
 const watchlistList = document.getElementById('watchlist-list');
 const newsList = document.getElementById('news-list');
@@ -94,6 +107,21 @@ function renderNews() {
   });
 }
 
+function renderTicker() {
+  if (!tickerTrack) {
+    return;
+  }
+
+  const repeatedItems = [...tickerItems, ...tickerItems];
+  tickerTrack.innerHTML = repeatedItems.map((item) => `
+    <div class="ticker-item">
+      <span class="ticker-name">${item.name}</span>
+      <span class="ticker-value">${item.value}</span>
+      <span class="ticker-change ${item.direction === 'down' ? 'negative' : 'positive'}">${item.change}</span>
+    </div>
+  `).join('');
+}
+
 function updateBriefingTime() {
   if (briefingTime) {
     briefingTime.textContent = `Updated ${new Date().toLocaleTimeString('en-GB', {
@@ -145,5 +173,6 @@ renderMarkets();
 renderPortfolioStats();
 renderWatchlist();
 renderNews();
+renderTicker();
 updateBriefingTime();
 animateAiScore();

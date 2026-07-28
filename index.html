@@ -19,16 +19,16 @@
         </div>
 
         <nav class="sidebar-nav">
-          <a class="nav-item active" href="#dashboard"><span>◉</span><span>Dashboard</span></a>
-          <a class="nav-item" href="#briefing"><span>◌</span><span>Morning Briefing</span></a>
-          <a class="nav-item" href="#markets"><span>◌</span><span>Markets</span></a>
-          <a class="nav-item" href="#advisor"><span>◌</span><span>AI Advisor</span></a>
-          <a class="nav-item" href="#portfolio"><span>◌</span><span>Portfolio</span></a>
-          <a class="nav-item" href="#watchlist"><span>◌</span><span>Watchlist</span></a>
-          <a class="nav-item" href="#news"><span>◌</span><span>News Intelligence</span></a>
-          <a class="nav-item" href="#oil"><span>◌</span><span>Heating Oil</span></a>
-          <a class="nav-item" href="#portfolio"><span>◌</span><span>Wealth</span></a>
-          <a class="nav-item" href="#settings"><span>◌</span><span>Settings</span></a>
+          <a class="nav-item active" href="#dashboard"><span class="nav-dot">●</span><span>Dashboard</span></a>
+          <a class="nav-item" href="#briefing"><span class="nav-dot">○</span><span>Morning Briefing</span></a>
+          <a class="nav-item" href="#markets"><span class="nav-dot">○</span><span>Markets</span></a>
+          <a class="nav-item" href="#advisor"><span class="nav-dot">○</span><span>AI Advisor</span></a>
+          <a class="nav-item" href="#portfolio"><span class="nav-dot">○</span><span>Portfolio</span></a>
+          <a class="nav-item" href="#watchlist"><span class="nav-dot">○</span><span>Watchlist</span></a>
+          <a class="nav-item" href="#news"><span class="nav-dot">○</span><span>News Intelligence</span></a>
+          <a class="nav-item" href="#oil"><span class="nav-dot">○</span><span>Heating Oil</span></a>
+          <a class="nav-item" href="#portfolio"><span class="nav-dot">○</span><span>Wealth</span></a>
+          <a class="nav-item" href="#settings"><span class="nav-dot">○</span><span>Settings</span></a>
         </nav>
 
         <div class="sidebar-foot">
@@ -56,6 +56,10 @@
             <button class="icon-btn" type="button" aria-label="Settings">⚙</button>
           </div>
         </header>
+
+        <section class="market-ticker" aria-label="Market ticker">
+          <div class="ticker-track" id="ticker-track"></div>
+        </section>
 
         <main class="dashboard-grid" id="dashboard">
           <section class="card card-large briefing-card" id="briefing">
