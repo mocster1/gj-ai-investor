@@ -451,6 +451,77 @@ svg {
   color: var(--positive);
 }
 
+.status-pill.status-live {
+  background: rgba(45, 212, 191, 0.14);
+  border-color: rgba(45, 212, 191, 0.24);
+  color: var(--positive);
+}
+
+.status-pill.status-partial {
+  background: rgba(245, 158, 11, 0.12);
+  border-color: rgba(245, 158, 11, 0.22);
+  color: var(--warning);
+}
+
+.status-pill.status-offline {
+  background: rgba(255, 255, 255, 0.06);
+  border-color: rgba(148, 163, 184, 0.18);
+  color: var(--muted);
+}
+
+.market-item-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.market-item-status,
+.ticker-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.18rem 0.55rem;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.market-item-status.live,
+.ticker-badge.live {
+  background: rgba(45, 212, 191, 0.14);
+  color: var(--positive);
+}
+
+.market-item-status.demo,
+.ticker-badge.demo {
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--muted);
+}
+
+.market-change.neutral,
+.ticker-change.neutral {
+  color: var(--muted);
+}
+
+.live-status-copy {
+  display: block;
+  color: var(--muted);
+  font-size: 0.78rem;
+}
+
+.market-overview-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  flex-wrap: wrap;
+}
+
 .briefing-time,
 .muted-text,
 .reason,
@@ -723,6 +794,8 @@ svg {
   border-radius: 0.95rem;
   background: rgba(255,255,255,0.04);
   border: 1px solid rgba(255,255,255,0.05);
+  display: grid;
+  gap: 0.5rem;
 }
 
 .market-item strong {

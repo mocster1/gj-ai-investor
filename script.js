@@ -1,14 +1,22 @@
-const markets = [
-  { name: 'FTSE', value: '8,210', change: '+0.4%', direction: 'up' },
-  { name: 'S&P500', value: '6,180', change: '+0.7%', direction: 'up' },
-  { name: 'NASDAQ', value: '20,340', change: '+1.1%', direction: 'up' },
-  { name: 'Bitcoin', value: '£91,420', change: '-1.8%', direction: 'down' },
-  { name: 'Ethereum', value: '£3,240', change: '+0.6%', direction: 'up' },
-  { name: 'Gold', value: '£2,640', change: '+0.1%', direction: 'up' },
-  { name: 'Silver', value: '£29.40', change: '-0.3%', direction: 'down' },
-  { name: 'Brent', value: '$78.40', change: '+2.3%', direction: 'up' },
-  { name: 'GBP/USD', value: '1.27', change: '+0.2%', direction: 'up' }
+const marketItems = [
+  { id: 'ftse', name: 'FTSE 100', value: '8,210', change: '+0.4%', direction: 'up', status: 'demo' },
+  { id: 'sp500', name: 'S&P 500', value: '6,180', change: '+0.7%', direction: 'up', status: 'demo' },
+  { id: 'nasdaq', name: 'NASDAQ', value: '20,340', change: '+1.1%', direction: 'up', status: 'demo' },
+  { id: 'bitcoin', name: 'Bitcoin', value: '£91,420', change: '-1.8%', direction: 'down', status: 'demo' },
+  { id: 'ethereum', name: 'Ethereum', value: '£3,240', change: '+0.6%', direction: 'up', status: 'demo' },
+  { id: 'gold', name: 'Gold', value: '£2,640', change: '+0.1%', direction: 'up', status: 'demo' },
+  { id: 'silver', name: 'Silver', value: '£29.40', change: '-0.3%', direction: 'down', status: 'demo' },
+  { id: 'brent', name: 'Brent Oil', value: '$78.40', change: '+2.3%', direction: 'up', status: 'demo' },
+  { id: 'gbpUsd', name: 'GBP/USD', value: '1.27', change: '', direction: 'neutral', status: 'demo' }
 ];
+
+const liveState = {
+  bitcoin: false,
+  ethereum: false,
+  gbpUsd: false,
+  lastUpdate: null,
+  gbpUsdSourceDate: null
+};
 
 const wealthItems = [
   { title: 'Cash', metric: '£125.00', note: 'Liquidity buffer' },
@@ -27,18 +35,6 @@ const newsItems = [
   { title: 'Policy tone stays constructive', detail: 'Central banks signal patience while growth remains resilient.' },
   { title: 'Energy supply risk persists', detail: 'Oil volatility remains elevated ahead of the next supply update.' },
   { title: 'Risk appetite holds', detail: 'Quality names continue to lead as volatility stays under control.' }
-];
-
-const tickerItems = [
-  { name: 'FTSE 100', value: '8,210', change: '+0.4%', direction: 'up' },
-  { name: 'S&P 500', value: '6,180', change: '+0.7%', direction: 'up' },
-  { name: 'NASDAQ', value: '20,340', change: '+1.1%', direction: 'up' },
-  { name: 'Bitcoin', value: '£91,420', change: '-1.8%', direction: 'down' },
-  { name: 'Ethereum', value: '£3,240', change: '+0.6%', direction: 'up' },
-  { name: 'Gold', value: '£2,640', change: '+0.1%', direction: 'up' },
-  { name: 'Silver', value: '£29.40', change: '-0.3%', direction: 'down' },
-  { name: 'Brent Oil', value: '$78.40', change: '+2.3%', direction: 'up' },
-  { name: 'GBP/USD', value: '1.27', change: '+0.2%', direction: 'up' }
 ];
 
 const marketGrid = document.getElementById('market-grid');
@@ -62,13 +58,16 @@ const explanationStorageKey = 'gj-ai-why-open';
 
 function renderMarkets() {
   marketGrid.innerHTML = '';
-  markets.forEach((market) => {
+  marketItems.forEach((market) => {
     const item = document.createElement('article');
     item.className = 'market-item';
     item.innerHTML = `
-      <span>${market.name}</span>
+      <div class="market-item-header">
+        <span>${market.name}</span>
+        <span class="market-item-status ${market.status}">${market.status === 'live' ? 'Live' : 'Demo'}</span>
+      </div>
       <strong>${market.value}</strong>
-      <span class="${market.direction === 'down' ? 'negative' : 'positive'}">${market.change}</span>
+      <span class="market-change ${market.direction === 'down' ? 'negative' : market.direction === 'up' ? 'positive' : 'neutral'}">${market.change || '—'}</span>
     `;
     marketGrid.appendChild(item);
   });
@@ -116,13 +115,173 @@ function renderNews() {
   });
 }
 
+function formatGBP(value) {
+  return new Intl.NumberFormat('en-GB', {
+    style: 'currency',
+    currency: 'GBP',
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2
+  }).format(value);
+}
+
+function formatGbpUsd(value) {
+  return Number(value).toFixed(4);
+}
+
+function formatPercent(value) {
+  if (typeof value !== 'number' || Number.isNaN(value)) {
+    return '';
+  }
+  return `${value >= 0 ? '+' : ''}${value.toFixed(1)}%`;
+}
+
+function formatTimestamp(timestamp) {
+  return new Date(timestamp).toLocaleTimeString('en-GB', {
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit'
+  });
+}
+
+function updateMarketItem(id, updates) {
+  const item = marketItems.find((entry) => entry.id === id);
+  if (!item) {
+    return;
+  }
+  Object.assign(item, updates);
+}
+
+function updateLiveStatusDisplay() {
+  const liveStatusPill = document.getElementById('live-status-pill');
+  const liveStatusCopy = document.getElementById('live-status-copy');
+  const totalLive = [liveState.bitcoin, liveState.ethereum, liveState.gbpUsd].filter(Boolean).length;
+  let label = 'Offline / using fallback data';
+  let pillClass = 'status-offline';
+  let extraCopy = '';
+
+  if (totalLive === 3) {
+    label = 'Live data connected';
+    pillClass = 'status-live';
+  } else if (totalLive > 0) {
+    label = 'Partially live';
+    pillClass = 'status-partial';
+    extraCopy = 'Some live data unavailable';
+  }
+
+  if (liveStatusPill) {
+    liveStatusPill.textContent = label;
+    liveStatusPill.className = `status-pill ${pillClass}`;
+  }
+
+  if (liveStatusCopy) {
+    const timeText = liveState.lastUpdate ? formatTimestamp(liveState.lastUpdate) : 'never';
+    const sourceText = liveState.gbpUsdSourceDate ? ` | GBP/USD source ${liveState.gbpUsdSourceDate}` : '';
+    liveStatusCopy.textContent = `Last update: ${timeText}${sourceText}${extraCopy ? ' · ' + extraCopy : ''}`;
+  }
+}
+
+async function fetchCoinGeckoData() {
+  const url = 'https://api.coingecko.com/api/v3/simple/price?ids=bitcoin,ethereum&vs_currencies=gbp&include_24hr_change=true&include_last_updated_at=true';
+
+  try {
+    const response = await fetch(url);
+    if (!response.ok) {
+      throw new Error(`CoinGecko responded ${response.status}`);
+    }
+
+    const data = await response.json();
+
+    ['bitcoin', 'ethereum'].forEach((id) => {
+      const coin = data[id];
+      if (!coin || typeof coin.gbp !== 'number') {
+        console.warn(`Missing CoinGecko data for ${id}`);
+        return;
+      }
+
+      const formattedPrice = formatGBP(coin.gbp);
+      const formattedChange = formatPercent(coin.gbp_24h_change);
+      const direction = coin.gbp_24h_change >= 0 ? 'up' : 'down';
+
+      updateMarketItem(id, {
+        value: formattedPrice,
+        change: formattedChange,
+        direction,
+        status: 'live'
+      });
+
+      liveState[id] = true;
+    });
+
+    return true;
+  } catch (error) {
+    console.error('CoinGecko data fetch failed:', error);
+    return false;
+  }
+}
+
+async function fetchFrankfurterData() {
+  const url = 'https://api.frankfurter.dev/v1/latest?base=GBP&symbols=USD';
+
+  try {
+    const response = await fetch(url);
+    if (!response.ok) {
+      throw new Error(`Frankfurter responded ${response.status}`);
+    }
+
+    const data = await response.json();
+    if (!data || typeof data.rates?.USD !== 'number') {
+      throw new Error('Invalid Frankfurter response');
+    }
+
+    const formattedValue = formatGbpUsd(data.rates.USD);
+
+    updateMarketItem('gbpUsd', {
+      value: formattedValue,
+      change: '',
+      direction: 'neutral',
+      status: 'live'
+    });
+
+    liveState.gbpUsd = true;
+    liveState.gbpUsdSourceDate = data.date;
+    return true;
+  } catch (error) {
+    console.error('Frankfurter data fetch failed:', error);
+    return false;
+  }
+}
+
+async function refreshMarketData() {
+  if (refreshButton) {
+    refreshButton.disabled = true;
+    refreshButton.textContent = 'Updating...';
+  }
+
+  const [coinResult, fxResult] = await Promise.allSettled([fetchCoinGeckoData(), fetchFrankfurterData()]);
+  const anySuccess = [coinResult, fxResult].some((result) => result.status === 'fulfilled' && result.value === true);
+
+  if (anySuccess) {
+    liveState.lastUpdate = Date.now();
+  }
+
+  renderMarkets();
+  renderTicker();
+  updateLiveStatusDisplay();
+
+  if (refreshButton) {
+    refreshButton.disabled = false;
+    refreshButton.textContent = 'Refresh Markets';
+  }
+}
+
 function renderTicker() {
-  const repeatedItems = [...tickerItems, ...tickerItems];
+  const repeatedItems = [...marketItems, ...marketItems];
   const tickerMarkup = repeatedItems.map((item) => `
     <div class="ticker-item">
       <span class="ticker-name">${item.name}</span>
+      <span class="ticker-badge ${item.status}">${item.status === 'live' ? 'Live' : 'Demo'}</span>
       <span class="ticker-value">${item.value}</span>
-      <span class="ticker-change ${item.direction === 'down' ? 'negative' : item.direction === 'up' ? 'positive' : ''}">${item.change}</span>
+      <span class="ticker-change ${item.direction === 'down' ? 'negative' : item.direction === 'up' ? 'positive' : 'neutral'}">${item.change || '—'}</span>
     </div>
   `).join('');
 
@@ -292,12 +451,8 @@ if (explanationToggle && explanationPanel) {
 }
 
 if (refreshButton) {
-  refreshButton.addEventListener('click', () => {
-    refreshButton.textContent = 'Demo refreshed';
-    updateBriefingTime();
-    setTimeout(() => {
-      refreshButton.textContent = 'Refresh demo';
-    }, 1200);
+  refreshButton.addEventListener('click', async () => {
+    await refreshMarketData();
   });
 }
 
@@ -318,5 +473,8 @@ renderNews();
 renderTicker();
 setupTickerInteraction(document.querySelector('.market-ticker'));
 setupTickerInteraction(document.querySelector('.mobile-market-ticker'));
+updateLiveStatusDisplay();
+refreshMarketData();
+setInterval(refreshMarketData, 300000);
 updateBriefingTime();
 animateAiScore();
