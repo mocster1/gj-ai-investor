@@ -234,6 +234,17 @@ function computeAIRecommendation() {
     explanationLines.push('The engine prefers to wait for clearer live signals before taking action.');
   }
 
+  // Determine which rules triggered for explainability
+  const triggeredRules = [];
+  if (sentiment >= 4 && healthScore >= 60 && volatility < 6) triggeredRules.push('Strong positive momentum with low volatility -> BUY');
+  if (sentiment >= 0 && healthScore >= 50) triggeredRules.push('Neutral-to-positive signals -> HOLD');
+  if (sentiment <= -4 || volatility >= 8) triggeredRules.push('Negative momentum or high volatility -> SELL/Reduce exposure');
+  if (!allLive && partialLive) triggeredRules.push('Partial live data -> Reduced confidence');
+  if (!allLive && !partialLive) triggeredRules.push('Fallback demo data -> Conservative stance');
+
+  const dataQuality = allLive ? 'Live' : partialLive ? 'Partially Live' : 'Demo Fallback';
+  const affectedAssets = (btcChange || ethChange) ? 'Bitcoin & Ethereum' : 'Market';
+
   return {
     recommendation,
     confidence,
@@ -244,8 +255,47 @@ function computeAIRecommendation() {
     reason: allLive ? 'The rule-based engine analyzed live price movement, FX flow and market health to set a recommendation.' : 'This recommendation is based on fallback demo values while live feed is unavailable.',
     explanationLines,
     liveData: allLive,
-    partialLive
+    partialLive,
+    triggeredRules,
+    dataQuality,
+    affectedAssets
   };
+}
+
+// Public generator: returns a fully-formed recommendation object and protects against NaN/undefined
+function generateInvestmentRecommendation() {
+  try {
+    const raw = computeAIRecommendation();
+    // sanitize values
+    const safe = Object.assign({}, raw);
+    safe.confidence = Number.isFinite(Number(raw.confidence)) ? Math.max(0, Math.min(100, Math.round(raw.confidence))) : 40;
+    safe.risk = raw.risk || 'Medium';
+    safe.recommendation = raw.recommendation || 'DO NOTHING TODAY';
+    safe.allocation = raw.allocation || 'Up to 5%';
+    safe.stopLoss = raw.stopLoss || '5%';
+    safe.review = raw.review || 'This Week';
+    safe.reason = raw.reason || 'Rule-based AI analysis using available market feeds.';
+    safe.explanationLines = Array.isArray(raw.explanationLines) ? raw.explanationLines : [];
+    safe.triggeredRules = Array.isArray(raw.triggeredRules) ? raw.triggeredRules : [];
+    safe.dataQuality = raw.dataQuality || (raw.liveData ? 'Live' : raw.partialLive ? 'Partially Live' : 'Demo Fallback');
+    safe.affectedAssets = raw.affectedAssets || 'Market';
+    return safe;
+  } catch (error) {
+    console.error('generateInvestmentRecommendation error', error);
+    return {
+      recommendation: 'DO NOTHING TODAY',
+      confidence: 30,
+      risk: 'High',
+      allocation: 'Up to 5%',
+      stopLoss: '10%',
+      review: 'This Week',
+      reason: 'Fallback rule triggered due to internal error.',
+      explanationLines: [],
+      triggeredRules: ['Internal error - fallback'],
+      dataQuality: 'Demo Fallback',
+      affectedAssets: 'Market'
+    };
+  }
 }
 
 function updateAIRecommendationUI() {
@@ -264,7 +314,7 @@ function updateAIRecommendationUI() {
   const explanationExit = document.getElementById('explanation-exit');
   const reasonList = document.getElementById('recommendation-reason-list');
 
-  const results = computeAIRecommendation();
+  const results = generateInvestmentRecommendation();
   const now = new Date();
 
   if (title) title.textContent = results.recommendation;
@@ -280,6 +330,19 @@ function updateAIRecommendationUI() {
   if (explanationRisk) explanationRisk.textContent = results.risk;
   if (explanationAllocation) explanationAllocation.textContent = results.allocation;
   if (explanationExit) explanationExit.textContent = `Stop loss set at ${results.stopLoss}`;
+
+  const dataQualityEl = document.getElementById('ai-data-quality');
+  const assetEl = document.getElementById('recommendation-asset');
+  const explanationRulesList = document.getElementById('explanation-rules-list');
+  const explanationDataQuality = document.getElementById('explanation-data-quality');
+
+  if (dataQualityEl) dataQualityEl.textContent = results.dataQuality;
+  if (assetEl) assetEl.textContent = results.affectedAssets;
+  if (explanationDataQuality) explanationDataQuality.textContent = results.dataQuality;
+
+  if (explanationRulesList) {
+    explanationRulesList.innerHTML = results.triggeredRules.map((r) => `<li>${r}</li>`).join('');
+  }
 
   if (reasonList) {
     reasonList.innerHTML = results.explanationLines.map((line) => `<li>${line}</li>`).join('');

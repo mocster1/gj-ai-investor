@@ -105,11 +105,15 @@
               <div>
                 <p class="eyebrow">AI Recommendation</p>
                 <h2 id="recommendation-title">BUY</h2>
+                <p class="muted-text" id="recommendation-asset">Bitcoin &amp; Ethereum</p>
               </div>
-              <div class="gauge confidence-gauge" aria-label="AI score gauge">
+              <div style="display:flex;align-items:center;gap:0.6rem;">
+                <span class="status-pill" id="ai-data-quality">Demo Fallback</span>
+                <div class="gauge confidence-gauge" aria-label="AI score gauge">
                 <div class="gauge-inner">
                   <strong id="ai-score-value">0</strong>
                   <span>AI Score</span>
+                </div>
                 </div>
               </div>
             </div>
@@ -165,6 +169,18 @@
                     <li>Oil prices are rising but not enough to change the recommendation.</li>
                     <li>No major macroeconomic risks have been identified today.</li>
                   </ul>
+                </div>
+
+                <div class="explanation-grid">
+                  <div class="explanation-block">
+                    <span class="explanation-label">Data Quality</span>
+                    <strong id="explanation-data-quality">Demo Fallback</strong>
+                  </div>
+                  <div class="explanation-block">
+                    <span class="explanation-label">Triggered Rules</span>
+                    <ul class="explanation-list" id="explanation-rules-list">
+                    </ul>
+                  </div>
                 </div>
 
                 <div class="explanation-grid">
