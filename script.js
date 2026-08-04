@@ -1,14 +1,12 @@
 const marketItems = [
-  { id: 'ftse', name: 'FTSE 100', value: '—', change: '—', direction: 'neutral', status: 'delayed' },
-  { id: 'sp500', name: 'S&P 500', value: '—', change: '—', direction: 'neutral', status: 'delayed' },
-  { id: 'nasdaq', name: 'NASDAQ', value: '—', change: '—', direction: 'neutral', status: 'delayed' },
-  { id: 'dowJones', name: 'Dow Jones', value: '—', change: '—', direction: 'neutral', status: 'delayed' },
-  { id: 'bitcoin', name: 'Bitcoin', value: '—', change: '—', direction: 'neutral', status: 'delayed' },
-  { id: 'gold', name: 'Gold', value: '—', change: '—', direction: 'neutral', status: 'delayed' },
-  { id: 'silver', name: 'Silver', value: '—', change: '—', direction: 'neutral', status: 'delayed' },
-  { id: 'brent', name: 'Brent Crude', value: '—', change: '—', direction: 'neutral', status: 'delayed' },
-  { id: 'gbpUsd', name: 'GBP/USD', value: '—', change: '—', direction: 'neutral', status: 'delayed' },
-  { id: 'eurUsd', name: 'EUR/USD', value: '—', change: '—', direction: 'neutral', status: 'delayed' }
+  { id: 'sp500', name: 'S&P 500', symbol: 'SPY', note: 'ETF proxy', value: '—', change: '—', direction: 'neutral', status: 'delayed' },
+  { id: 'nasdaq', name: 'NASDAQ 100', symbol: 'QQQ', note: 'ETF proxy', value: '—', change: '—', direction: 'neutral', status: 'delayed' },
+  { id: 'dowJones', name: 'Dow Jones', symbol: 'DIA', note: 'ETF proxy', value: '—', change: '—', direction: 'neutral', status: 'delayed' },
+  { id: 'aapl', name: 'Apple', symbol: 'AAPL', value: '—', change: '—', direction: 'neutral', status: 'delayed' },
+  { id: 'bitcoin', name: 'Bitcoin', symbol: 'BTC/USD', value: '—', change: '—', direction: 'neutral', status: 'delayed' },
+  { id: 'ethereum', name: 'Ethereum', symbol: 'ETH/USD', value: '—', change: '—', direction: 'neutral', status: 'delayed' },
+  { id: 'gbpUsd', name: 'GBP/USD', symbol: 'GBP/USD', value: '—', change: '—', direction: 'neutral', status: 'delayed' },
+  { id: 'eurUsd', name: 'EUR/USD', symbol: 'EUR/USD', value: '—', change: '—', direction: 'neutral', status: 'delayed' }
 ];
 
 const MARKET_STATUS_STORAGE_KEY = 'gj_market_status_v1';
@@ -57,34 +55,50 @@ function applyMarketSnapshot(snapshot) {
     marketDataStatus = 'delayed';
   }
 
+  let nextMarketDataStatus = 'delayed';
+  let hasLiveStatus = false;
+  let hasClosedStatus = false;
+  let hasFallbackStatus = false;
   const entries = Object.entries(snapshot.data);
   entries.forEach(([id, data]) => {
     if (!data) return;
     const item = marketItems.find((entry) => entry.id === id);
     if (!item) return;
 
-    const nextStatus = data.status === 'closed' ? 'closed' : 'live';
+    const nextStatus = data.status === 'market-closed' ? 'closed' : data.status === 'live' ? 'live' : data.status === 'rate-limited' ? 'rate-limited' : data.status === 'unavailable' ? 'unavailable' : 'delayed';
     const nextValue = data.value || '—';
-    const nextChange = data.change ? data.change.change : '—';
-    const nextDirection = data.change ? data.change.direction : 'neutral';
+    const nextChange = data.change || '—';
+    const nextDirection = data.direction || 'neutral';
 
     Object.assign(item, {
       value: nextValue,
       change: nextChange,
       direction: nextDirection,
-      status: nextStatus
+      status: nextStatus,
+      symbol: data.symbol || item.symbol,
+      note: data.note || item.note
     });
 
     if (nextStatus === 'live') {
+      hasLiveStatus = true;
       lastSuccessfulMarketSnapshot = snapshot;
-      marketDataStatus = 'live';
-      persistMarketStatus(marketDataStatus);
     } else if (nextStatus === 'closed') {
-      marketDataStatus = 'closed';
-      persistMarketStatus(marketDataStatus);
+      hasClosedStatus = true;
+    } else if (nextStatus === 'rate-limited' || nextStatus === 'unavailable' || nextStatus === 'delayed') {
+      hasFallbackStatus = true;
     }
   });
 
+  if (hasLiveStatus) {
+    nextMarketDataStatus = 'live';
+  } else if (hasClosedStatus) {
+    nextMarketDataStatus = 'closed';
+  } else if (hasFallbackStatus) {
+    nextMarketDataStatus = 'delayed';
+  }
+
+  marketDataStatus = nextMarketDataStatus;
+  persistMarketStatus(marketDataStatus);
   return true;
 }
 
@@ -94,11 +108,16 @@ function renderMarkets() {
     const item = document.createElement('article');
     item.className = 'market-item';
     item.style.animationDelay = `${index * 40}ms`;
-    const statusLabel = market.status === 'live' ? 'LIVE' : market.status === 'closed' ? 'MARKET CLOSED' : 'DELAYED';
+    const statusClass = market.status === 'live' ? 'live' : market.status === 'closed' ? 'closed' : market.status === 'rate-limited' ? 'rate-limited' : market.status === 'unavailable' ? 'unavailable' : 'delayed';
+    const statusLabel = market.status === 'live' ? 'LIVE' : market.status === 'closed' ? 'MARKET CLOSED' : market.status === 'rate-limited' ? 'RATE LIMITED' : market.status === 'unavailable' ? 'UNAVAILABLE' : 'DELAYED';
     item.innerHTML = `
       <div class="market-item-header">
-        <span>${market.name}</span>
-        <span class="market-item-status ${market.status === 'live' ? 'live' : market.status === 'closed' ? 'closed' : 'delayed'}">${statusLabel}</span>
+        <div class="market-item-title-block">
+          <span class="market-item-name">${market.name}</span>
+          ${market.symbol ? `<span class="market-item-symbol">${market.symbol}</span>` : ''}
+          ${market.note ? `<span class="market-item-note">${market.note}</span>` : ''}
+        </div>
+        <span class="market-item-status ${statusClass}">${statusLabel}</span>
       </div>
       <strong>${market.value}</strong>
       <span class="market-change ${market.direction === 'down' ? 'negative' : market.direction === 'up' ? 'positive' : 'neutral'}">${market.change || '—'}</span>
@@ -1448,47 +1467,70 @@ async function tryApplyOfflineFallback(errorDetail = null) {
   return false;
 }
 
+let marketRefreshInFlight = false;
+let marketRefreshCooldownUntil = 0;
+
+function setRefreshButtonState(isBusy = false) {
+  if (!refreshButton) {
+    return;
+  }
+
+  const now = Date.now();
+  const cooldownActive = now < marketRefreshCooldownUntil;
+  refreshButton.disabled = isBusy || cooldownActive;
+  refreshButton.textContent = isBusy ? 'Updating...' : cooldownActive ? 'Refresh in 60s' : 'Refresh prices';
+}
+
 async function refreshMarketData() {
-  if (refreshButton) {
-    refreshButton.disabled = true;
-    refreshButton.textContent = 'Updating...';
+  const now = Date.now();
+  if (marketRefreshInFlight) {
+    return;
+  }
+  if (now < marketRefreshCooldownUntil) {
+    setRefreshButtonState(false);
+    return;
   }
 
-  const snapshot = await marketDataService.getMarketSnapshot();
-  let usedFallback = false;
+  marketRefreshInFlight = true;
+  setRefreshButtonState(true);
 
-  if (snapshot && snapshot.data) {
-    const success = applyMarketSnapshot(snapshot);
-    if (!success) {
-      usedFallback = await tryApplyOfflineFallback(snapshot.error || null);
+  try {
+    const snapshot = await marketDataService.getMarketSnapshot(true);
+    let usedFallback = false;
+
+    if (snapshot && snapshot.data) {
+      const success = applyMarketSnapshot(snapshot);
+      if (!success) {
+        usedFallback = await tryApplyOfflineFallback(snapshot.error || null);
+      }
+    } else {
+      usedFallback = await tryApplyOfflineFallback(snapshot?.error || null);
     }
-  } else {
-    usedFallback = await tryApplyOfflineFallback(snapshot?.error || null);
-  }
 
-  if (!usedFallback) {
-    setDelayedMarketStatus(snapshot?.error || null);
-  }
+    if (!usedFallback && (!snapshot || !snapshot.data || snapshot.error)) {
+      setDelayedMarketStatus(snapshot?.error || null);
+    }
 
-  renderMarkets();
-  renderTicker();
-  updateLiveStatusDisplay();
-  runAIRecommendation();
-
-  if (refreshButton) {
-    refreshButton.disabled = false;
-    refreshButton.textContent = 'Refresh Markets';
+    renderMarkets();
+    renderTicker();
+    updateLiveStatusDisplay();
+    runAIRecommendation();
+  } finally {
+    marketRefreshInFlight = false;
+    marketRefreshCooldownUntil = Date.now() + 60 * 1000;
+    setRefreshButtonState(false);
   }
 }
 
 function renderTicker() {
   const repeatedItems = [...marketItems, ...marketItems];
   const tickerMarkup = repeatedItems.map((item) => {
-    const badgeText = item.status === 'live' ? 'LIVE' : item.status === 'closed' ? 'CLOSED' : 'DELAYED';
+    const statusClass = item.status === 'live' ? 'live' : item.status === 'closed' ? 'closed' : item.status === 'rate-limited' ? 'rate-limited' : item.status === 'unavailable' ? 'unavailable' : 'delayed';
+    const badgeText = item.status === 'live' ? 'LIVE' : item.status === 'closed' ? 'CLOSED' : item.status === 'rate-limited' ? 'RATE LIMITED' : item.status === 'unavailable' ? 'UNAVAILABLE' : 'DELAYED';
     return `
       <div class="ticker-item">
         <span class="ticker-name">${item.name}</span>
-        <span class="ticker-badge ${item.status === 'live' ? 'live' : item.status === 'closed' ? 'closed' : 'delayed'}">${badgeText}</span>
+        <span class="ticker-badge ${statusClass}">${badgeText}</span>
         <span class="ticker-value">${item.value}</span>
         <span class="ticker-change ${item.direction === 'down' ? 'negative' : item.direction === 'up' ? 'positive' : 'neutral'}">${item.change || '—'}</span>
       </div>
@@ -1689,7 +1731,7 @@ renderOilDashboard(oilState);
 refreshHeatingOilData();
 startOilAutoRefresh();
 refreshMarketData();
-setInterval(refreshMarketData, 300000);
+setInterval(refreshMarketData, 15 * 60 * 1000);
 updateBriefingTime();
 animateAiScore();
 

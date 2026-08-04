@@ -1,22 +1,24 @@
 import { CONFIG } from './config.js';
 
-const CACHE_TTL_MS = 5 * 60 * 1000;
-const BASE_URL = 'https://api.twelvedata.com/quote';
-const DEFAULT_SYMBOLS = {
-  ftse: 'INDEXFTSE:FSI',
-  sp500: 'SPY',
-  nasdaq: 'QQQ',
-  dowJones: 'DIA',
-  bitcoin: 'BTCUSD',
-  gold: 'XAUUSD',
-  silver: 'XAGUSD',
-  brent: 'BZ=F',
-  gbpUsd: 'GBPUSD',
-  eurUsd: 'EURUSD'
-};
+const CACHE_TTL_MS = 15 * 60 * 1000;
+const SYMBOL_SEARCH_URL = 'https://api.twelvedata.com/symbol_search';
+const QUOTE_URL = 'https://api.twelvedata.com/quote';
+const REQUEST_WINDOW_MS = 60 * 1000;
+const MAX_REQUESTS_PER_WINDOW = 8;
+const REQUEST_HISTORY = [];
+const ENABLED_SYMBOLS = [
+  { id: 'aapl', name: 'Apple', symbol: 'AAPL', kind: 'stock' },
+  { id: 'sp500', name: 'S&P 500', symbol: 'SPY', kind: 'etf', note: 'ETF proxy' },
+  { id: 'nasdaq', name: 'NASDAQ 100', symbol: 'QQQ', kind: 'etf', note: 'ETF proxy' },
+  { id: 'dowJones', name: 'Dow Jones', symbol: 'DIA', kind: 'etf', note: 'ETF proxy' },
+  { id: 'bitcoin', name: 'Bitcoin', symbol: 'BTC/USD', kind: 'crypto' },
+  { id: 'ethereum', name: 'Ethereum', symbol: 'ETH/USD', kind: 'crypto' },
+  { id: 'gbpUsd', name: 'GBP/USD', symbol: 'GBP/USD', kind: 'forex' },
+  { id: 'eurUsd', name: 'EUR/USD', symbol: 'EUR/USD', kind: 'forex' }
+];
+const DEFAULT_SYMBOLS = Object.fromEntries(ENABLED_SYMBOLS.map((item) => [item.id, item.symbol]));
 const PRIORITY_SYMBOLS = ['AAPL'];
 let LAST_ERROR = null;
-
 const CACHE = new Map();
 let lastFetchAt = 0;
 
@@ -25,170 +27,321 @@ function getApiKey() {
   return apiKey;
 }
 
-function formatNumber(value, digits = 2) {
-  if (typeof value !== 'number' || !Number.isFinite(value)) {
+function redactUrl(url) {
+  const apiKey = getApiKey();
+  if (!apiKey) {
+    return url;
+  }
+
+  try {
+    const parsed = new URL(url);
+    if (parsed.searchParams.has('apikey')) {
+      parsed.searchParams.set('apikey', '[REDACTED]');
+    }
+    return parsed.toString();
+  } catch (error) {
+    return url.replace(apiKey, '[REDACTED]');
+  }
+}
+
+function toNumber(value) {
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    return value;
+  }
+  if (typeof value === 'string') {
+    const trimmed = value.trim();
+    if (!trimmed) {
+      return null;
+    }
+    const numeric = Number(trimmed);
+    return Number.isFinite(numeric) ? numeric : null;
+  }
+  return null;
+}
+
+function formatPrice(value, kind) {
+  const numeric = toNumber(value);
+  if (numeric == null) {
     return null;
   }
-  return Number(value.toFixed(digits));
+  if (kind === 'forex') {
+    return Number(numeric.toFixed(4)).toFixed(4);
+  }
+  return Number(numeric.toFixed(2)).toFixed(2);
 }
 
-function getDisplayValue(symbolKey, quote) {
-  if (!quote) return null;
-  const price = formatNumber(quote.close, symbolKey === 'gbpUsd' || symbolKey === 'eurUsd' ? 4 : 2);
-  if (price == null) return null;
-
-  if (symbolKey === 'bitcoin') return `£${price.toLocaleString('en-GB')}`;
-  if (symbolKey === 'gold') return `£${price.toLocaleString('en-GB')}`;
-  if (symbolKey === 'silver') return `£${price.toFixed(2)}`;
-  if (symbolKey === 'brent') return `$${price.toFixed(2)}`;
-  if (symbolKey === 'gbpUsd' || symbolKey === 'eurUsd') return price.toFixed(4);
-  return price.toLocaleString('en-GB');
+function formatChange(changeValue, percentValue) {
+  const numericValue = percentValue != null ? percentValue : changeValue;
+  if (numericValue == null) {
+    return null;
+  }
+  const rounded = Number(numericValue.toFixed(1));
+  return `${rounded >= 0 ? '+' : ''}${rounded.toFixed(1)}%`;
 }
 
-function getDisplayChange(quote) {
-  if (!quote) return null;
-  const change = formatNumber(quote.percent_change, 1);
-  if (change == null) return null;
-  const direction = change > 0 ? 'up' : change < 0 ? 'down' : 'neutral';
-  return { change: `${change >= 0 ? '+' : ''}${change.toFixed(1)}%`, direction };
+function getDirection(changeValue, percentValue) {
+  const numericValue = percentValue != null ? percentValue : changeValue;
+  if (numericValue == null) {
+    return 'neutral';
+  }
+  if (numericValue > 0) {
+    return 'up';
+  }
+  if (numericValue < 0) {
+    return 'down';
+  }
+  return 'neutral';
 }
 
-function getStatusFromMeta(quote, fallbackStatus) {
-  if (!quote) return fallbackStatus;
-  const isSessionOpen = quote.is_market_open !== false;
-  if (!isSessionOpen) return 'closed';
-  return fallbackStatus;
+async function waitForRateLimit() {
+  let now = Date.now();
+  while (REQUEST_HISTORY.length >= MAX_REQUESTS_PER_WINDOW) {
+    const oldest = REQUEST_HISTORY[0];
+    const waitMs = REQUEST_WINDOW_MS - (now - oldest);
+    if (waitMs > 0) {
+      await new Promise((resolve) => setTimeout(resolve, waitMs + 50));
+      now = Date.now();
+      continue;
+    }
+    REQUEST_HISTORY.shift();
+  }
+
+  REQUEST_HISTORY.push(now);
 }
 
-async function fetchQuote(symbol, { logToConsole = true } = {}) {
+async function requestJson(url, { symbol, label }) {
   const apiKey = getApiKey();
   if (!apiKey) {
     throw new Error('Missing Twelve Data API key');
   }
 
-  const url = new URL(BASE_URL);
+  await waitForRateLimit();
+  const requestUrl = redactUrl(url);
+  try {
+    const response = await fetch(url, { cache: 'no-store' });
+    const responseText = await response.text();
+    if (response.status === 429) {
+      const message = `Twelve Data rate limited for ${symbol}`;
+      LAST_ERROR = { symbol, requestUrl, message };
+      throw Object.assign(new Error(message), { status: 429, responseText });
+    }
+
+    if (!response.ok) {
+      const message = `Twelve Data request failed for ${symbol}: ${response.status}`;
+      LAST_ERROR = { symbol, requestUrl, message, responseText };
+      throw new Error(message);
+    }
+
+    let payload;
+    try {
+      payload = JSON.parse(responseText);
+    } catch (error) {
+      const message = `Invalid Twelve Data response for ${symbol}`;
+      LAST_ERROR = { symbol, requestUrl, message, responseText };
+      throw new Error(message);
+    }
+
+    LAST_ERROR = null;
+    return { payload, requestUrl, responseText };
+  } catch (error) {
+    if (error?.status === 429) {
+      throw error;
+    }
+    if (label) {
+      console.error(`[Twelve Data] ${label} error for ${symbol}:`, error);
+    }
+    LAST_ERROR = { symbol, requestUrl, message: error?.message || 'Unknown Twelve Data error' };
+    throw error;
+  }
+}
+
+async function verifySymbol(symbol) {
+  const apiKey = getApiKey();
+  const url = new URL(SYMBOL_SEARCH_URL);
+  url.searchParams.set('symbol', symbol);
+  url.searchParams.set('apikey', apiKey);
+
+  const { payload } = await requestJson(url.toString(), { symbol, label: 'symbol_search' });
+  const matches = Array.isArray(payload?.data) ? payload.data : [];
+  if (!matches.length) {
+    return null;
+  }
+
+  const exactMatch = matches.find((entry) => String(entry?.symbol || '').toUpperCase() === String(symbol).toUpperCase());
+  return exactMatch || matches[0] || null;
+}
+
+async function fetchQuote(symbol) {
+  const apiKey = getApiKey();
+  const url = new URL(QUOTE_URL);
   url.searchParams.set('symbol', symbol);
   url.searchParams.set('apikey', apiKey);
   url.searchParams.set('interval', '1h');
 
-  const requestUrl = url.toString().replace(apiKey, '[REDACTED]');
-  if (logToConsole) {
-    console.log('[Twelve Data] Request URL:', requestUrl);
-  }
-
-  let response;
-  try {
-    response = await fetch(url.toString(), { cache: 'no-store' });
-  } catch (error) {
-    if (logToConsole) {
-      console.error('[Twelve Data] Network error:', error);
-    }
-    LAST_ERROR = { symbol, requestUrl, message: error.message };
-    throw error;
-  }
-
-  const responseText = await response.text();
-  if (logToConsole) {
-    console.log('[Twelve Data] Response body:', responseText);
-  }
-
-  if (!response.ok) {
-    const message = `Twelve Data request failed: ${response.status} ${response.statusText}\n${responseText}`;
-    LAST_ERROR = { symbol, requestUrl, responseBody: responseText, message };
-    throw new Error(message);
-  }
-
-  let payload;
-  try {
-    payload = JSON.parse(responseText);
-  } catch (error) {
-    const message = `Invalid JSON response: ${responseText}`;
-    LAST_ERROR = { symbol, requestUrl, responseBody: responseText, message };
-    throw new Error(message);
-  }
-
+  const { payload } = await requestJson(url.toString(), { symbol, label: 'quote' });
   if (!payload || payload.code) {
-    const message = payload?.message || 'Invalid Twelve Data response';
-    LAST_ERROR = { symbol, requestUrl, responseBody: responseText, message };
+    const message = payload?.message || 'Invalid quote payload';
+    LAST_ERROR = { symbol, message };
     throw new Error(message);
   }
 
-  LAST_ERROR = null;
-  return payload;
+  const quote = payload?.data && typeof payload.data === 'object' && !Array.isArray(payload.data)
+    ? payload.data
+    : payload;
+  return quote;
 }
 
-async function fetchAllQuotes() {
-  const now = Date.now();
-  const cached = CACHE.get('all');
-  if (cached && now - cached.timestamp < CACHE_TTL_MS) {
-    return cached;
-  }
+function buildSnapshotEntry(item, result) {
+  const numericPrice = toNumber(result?.quote?.close);
+  const changeValue = toNumber(result?.quote?.change);
+  const percentValue = toNumber(result?.quote?.percent_change);
+  const status = numericPrice == null
+    ? result?.errorStatus || 'unavailable'
+    : result?.cached
+      ? 'delayed'
+      : (result?.quote?.is_market_open === false ? 'market-closed' : 'live');
+  const value = numericPrice == null ? '—' : formatPrice(numericPrice, item.kind);
+  const changeText = numericPrice == null ? '—' : formatChange(changeValue, percentValue) || '—';
+  const direction = numericPrice == null ? 'neutral' : getDirection(changeValue, percentValue);
 
-  const prioritySymbols = PRIORITY_SYMBOLS.map((symbol) => ['aapl', symbol]);
-  const remainingSymbols = Object.entries(DEFAULT_SYMBOLS);
-  const results = {};
-  let hadSuccess = false;
-
-  for (const [key, symbol] of prioritySymbols) {
-    try {
-      const quote = await fetchQuote(symbol);
-      results[key] = {
-        symbol,
-        quote,
-        status: getStatusFromMeta(quote, 'live'),
-        value: getDisplayValue(key, quote),
-        change: getDisplayChange(quote),
-        lastUpdated: now
-      };
-      hadSuccess = true;
-      console.log('[Twelve Data] Verified AAPL quote:', quote);
-      break;
-    } catch (error) {
-      console.error(`Unable to load ${key} from Twelve Data`, error);
-      throw error;
-    }
-  }
-
-  if (!hadSuccess) {
-    if (cached) {
-      return cached;
-    }
-    throw new Error(LAST_ERROR?.message || 'No market data could be retrieved');
-  }
-
-  for (const [key, symbol] of remainingSymbols) {
-    try {
-      const quote = await fetchQuote(symbol);
-      results[key] = {
-        symbol,
-        quote,
-        status: getStatusFromMeta(quote, 'live'),
-        value: getDisplayValue(key, quote),
-        change: getDisplayChange(quote),
-        lastUpdated: now
-      };
-      hadSuccess = true;
-    } catch (error) {
-      console.error(`Unable to load ${key} from Twelve Data`, error);
-    }
-  }
-
-  const resolved = {
-    timestamp: now,
-    data: {
-      ...(cached ? cached.data : {}),
-      ...results
-    },
-    status: 'live'
+  return {
+    id: item.id,
+    name: item.name,
+    symbol: item.symbol,
+    note: item.note || null,
+    value,
+    change: changeText,
+    direction,
+    status,
+    datetime: result?.quote?.datetime || null,
+    previousClose: result?.quote?.previous_close || null,
+    lastUpdated: result?.timestamp || Date.now(),
+    cached: !!result?.cached
   };
-  CACHE.set('all', resolved);
-  lastFetchAt = now;
-  return resolved;
 }
 
-async function getMarketSnapshot() {
+async function resolveSymbol(item, { allowCached = true, forceRefresh = false } = {}) {
+  const cacheKey = `quote:${item.symbol}`;
+  const cached = CACHE.get(cacheKey);
+  const now = Date.now();
+
+  if (!forceRefresh && allowCached && cached && now - cached.timestamp < CACHE_TTL_MS) {
+    return {
+      ...cached,
+      cached: true,
+      errorStatus: 'delayed'
+    };
+  }
+
+  const verified = await verifySymbol(item.symbol);
+  if (!verified) {
+    if (allowCached && cached) {
+      return {
+        ...cached,
+        cached: true,
+        errorStatus: 'delayed'
+      };
+    }
+    return {
+      quote: null,
+      errorStatus: 'unavailable'
+    };
+  }
+
   try {
-    return await fetchAllQuotes();
+    const quote = await fetchQuote(item.symbol);
+    const numericPrice = toNumber(quote?.close);
+    if (numericPrice == null) {
+      if (allowCached && cached) {
+        return {
+          ...cached,
+          cached: true,
+          errorStatus: 'delayed'
+        };
+      }
+      return {
+        quote: null,
+        errorStatus: 'unavailable'
+      };
+    }
+
+    const resolved = {
+      timestamp: now,
+      quote,
+      cached: false
+    };
+    CACHE.set(cacheKey, resolved);
+    return resolved;
+  } catch (error) {
+    if (error?.status === 429) {
+      if (allowCached && cached) {
+        return {
+          ...cached,
+          cached: true,
+          errorStatus: 'delayed'
+        };
+      }
+      return {
+        quote: null,
+        errorStatus: 'rate-limited'
+      };
+    }
+
+    if (allowCached && cached) {
+      return {
+        ...cached,
+        cached: true,
+        errorStatus: 'delayed'
+      };
+    }
+
+    return {
+      quote: null,
+      errorStatus: 'unavailable'
+    };
+  }
+}
+
+async function fetchAllQuotes({ forceRefresh = false } = {}) {
+  const now = Date.now();
+  const cachedSnapshot = CACHE.get('snapshot');
+  const hasUsableCachedSnapshot = !forceRefresh && cachedSnapshot && typeof cachedSnapshot === 'object' && cachedSnapshot.data && Object.keys(cachedSnapshot.data).length > 0 && now - cachedSnapshot.timestamp < CACHE_TTL_MS;
+  if (hasUsableCachedSnapshot) {
+    return {
+      ...cachedSnapshot,
+      status: 'delayed'
+    };
+  }
+
+  const results = {};
+
+  for (const item of ENABLED_SYMBOLS) {
+    const resolved = await resolveSymbol(item, { forceRefresh });
+    const entry = buildSnapshotEntry(item, resolved);
+    results[item.id] = entry;
+
+    if (item.id === 'aapl') {
+      if (entry.status !== 'live' && entry.status !== 'market-closed') {
+        break;
+      }
+    }
+  }
+
+  const hasLiveValues = Object.values(results).some((item) => item.status === 'live');
+  const hasClosedValues = Object.values(results).some((item) => item.status === 'market-closed');
+  const snapshot = {
+    timestamp: now,
+    data: results,
+    status: hasLiveValues ? 'live' : hasClosedValues ? 'closed' : 'delayed'
+  };
+  CACHE.set('snapshot', snapshot);
+  lastFetchAt = now;
+  return snapshot;
+}
+
+async function getMarketSnapshot(forceRefresh = false) {
+  try {
+    return await fetchAllQuotes({ forceRefresh });
   } catch (error) {
     console.error('Market data service error', error);
     return {
