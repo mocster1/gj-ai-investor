@@ -1,11 +1,11 @@
 import { CONFIG } from './config.js';
 
 const CACHE_TTL_MS = 15 * 60 * 1000;
-const SYMBOL_SEARCH_URL = 'https://api.twelvedata.com/symbol_search';
-const QUOTE_URL = 'https://api.twelvedata.com/quote';
 const REQUEST_WINDOW_MS = 60 * 1000;
 const MAX_REQUESTS_PER_WINDOW = 8;
 const REQUEST_HISTORY = [];
+const TWELVE_DATA_QUOTE_URL = 'https://api.twelvedata.com/quote';
+const SECURE_PROXY_URL = 'https://market-data-proxy.gj-ai-investor.workers.dev/quote';
 const ENABLED_SYMBOLS = [
   { id: 'aapl', name: 'Apple', symbol: 'AAPL', kind: 'stock' },
   { id: 'sp500', name: 'S&P 500', symbol: 'SPY', kind: 'etf', note: 'ETF proxy' },
@@ -27,21 +27,33 @@ function getApiKey() {
   return apiKey;
 }
 
-function redactUrl(url) {
-  const apiKey = getApiKey();
-  if (!apiKey) {
-    return url;
+function isLocalhostEnvironment() {
+  if (typeof window === 'undefined' || !window.location) {
+    return false;
+  }
+  const host = window.location.hostname;
+  return host === 'localhost' || host === '127.0.0.1' || host === '[::1]';
+}
+
+function getQuoteEndpointUrl(symbol) {
+  if (isLocalhostEnvironment()) {
+    const url = new URL(TWELVE_DATA_QUOTE_URL);
+    url.searchParams.set('symbol', symbol);
+    url.searchParams.set('interval', '1h');
+    const apiKey = getApiKey();
+    if (apiKey) {
+      url.searchParams.set('apikey', apiKey);
+    }
+    return url.toString();
   }
 
-  try {
-    const parsed = new URL(url);
-    if (parsed.searchParams.has('apikey')) {
-      parsed.searchParams.set('apikey', '[REDACTED]');
-    }
-    return parsed.toString();
-  } catch (error) {
-    return url.replace(apiKey, '[REDACTED]');
-  }
+  const url = new URL(SECURE_PROXY_URL);
+  url.searchParams.set('symbol', symbol);
+  return url.toString();
+}
+
+function redactUrl(url) {
+  return url.replace(/apikey=[^&]+/i, 'apikey=[REDACTED]');
 }
 
 function toNumber(value) {
@@ -110,11 +122,6 @@ async function waitForRateLimit() {
 }
 
 async function requestJson(url, { symbol, label }) {
-  const apiKey = getApiKey();
-  if (!apiKey) {
-    throw new Error('Missing Twelve Data API key');
-  }
-
   await waitForRateLimit();
   const requestUrl = redactUrl(url);
   try {
@@ -155,32 +162,12 @@ async function requestJson(url, { symbol, label }) {
   }
 }
 
-async function verifySymbol(symbol) {
-  const apiKey = getApiKey();
-  const url = new URL(SYMBOL_SEARCH_URL);
-  url.searchParams.set('symbol', symbol);
-  url.searchParams.set('apikey', apiKey);
-
-  const { payload } = await requestJson(url.toString(), { symbol, label: 'symbol_search' });
-  const matches = Array.isArray(payload?.data) ? payload.data : [];
-  if (!matches.length) {
-    return null;
-  }
-
-  const exactMatch = matches.find((entry) => String(entry?.symbol || '').toUpperCase() === String(symbol).toUpperCase());
-  return exactMatch || matches[0] || null;
-}
-
 async function fetchQuote(symbol) {
-  const apiKey = getApiKey();
-  const url = new URL(QUOTE_URL);
-  url.searchParams.set('symbol', symbol);
-  url.searchParams.set('apikey', apiKey);
-  url.searchParams.set('interval', '1h');
+  const endpointUrl = getQuoteEndpointUrl(symbol);
+  const { payload } = await requestJson(endpointUrl, { symbol, label: 'quote' });
 
-  const { payload } = await requestJson(url.toString(), { symbol, label: 'quote' });
-  if (!payload || payload.code) {
-    const message = payload?.message || 'Invalid quote payload';
+  if (!payload || payload.error) {
+    const message = payload?.error || 'Invalid quote payload';
     LAST_ERROR = { symbol, message };
     throw new Error(message);
   }
@@ -188,6 +175,7 @@ async function fetchQuote(symbol) {
   const quote = payload?.data && typeof payload.data === 'object' && !Array.isArray(payload.data)
     ? payload.data
     : payload;
+
   return quote;
 }
 
@@ -230,21 +218,6 @@ async function resolveSymbol(item, { allowCached = true, forceRefresh = false } 
       ...cached,
       cached: true,
       errorStatus: 'delayed'
-    };
-  }
-
-  const verified = await verifySymbol(item.symbol);
-  if (!verified) {
-    if (allowCached && cached) {
-      return {
-        ...cached,
-        cached: true,
-        errorStatus: 'delayed'
-      };
-    }
-    return {
-      quote: null,
-      errorStatus: 'unavailable'
     };
   }
 

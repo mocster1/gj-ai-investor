@@ -26,3 +26,15 @@ python -m http.server 8000
 ```
 
 Then visit http://localhost:8000.
+
+## Production deployment
+
+The GitHub Pages build now uses a Cloudflare Worker proxy so the Twelve Data API key is never exposed in browser JavaScript.
+
+1. Create a Cloudflare Worker from [worker.js](worker.js).
+2. Add the `TWELVE_DATA_API_KEY` secret in the Worker settings.
+3. Deploy the Worker and copy its public URL.
+4. Update the `SECURE_PROXY_URL` constant in [marketDataService.js](marketDataService.js).
+5. Publish the GitHub Pages site.
+
+See [DEPLOYMENT.md](DEPLOYMENT.md) for the full step-by-step instructions.
