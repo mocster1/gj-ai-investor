@@ -18,6 +18,182 @@ const liveState = {
   gbpUsdSourceDate: null
 };
 
+const OIL_STORAGE_KEY = 'gj_oil_dashboard_v1';
+const OIL_REFRESH_MS = 15 * 60 * 1000;
+const OIL_FALLBACK = {
+  price: 1.38,
+  trend: 4.8,
+  supplier: 'DJ Davies Fuels',
+  buy: 'Yes',
+  source: 'demo',
+  updatedAt: Date.now(),
+  warning: false
+};
+
+let oilState = loadOilStateFromStorage() || { ...OIL_FALLBACK };
+persistOilState(oilState);
+let oilRefreshTimer = null;
+
+function loadOilStateFromStorage() {
+  try {
+    const raw = localStorage.getItem(OIL_STORAGE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    if (!parsed || typeof parsed.price !== 'number') return null;
+    return parsed;
+  } catch (error) {
+    console.warn('Unable to read cached heating oil state', error);
+    return null;
+  }
+}
+
+function persistOilState(state) {
+  try {
+    localStorage.setItem(OIL_STORAGE_KEY, JSON.stringify(state));
+  } catch (error) {
+    console.warn('Unable to save heating oil state', error);
+  }
+}
+
+function formatOilPrice(value) {
+  return `£${Number(value).toFixed(2)}/l`;
+}
+
+function formatOilTrend(value) {
+  const numeric = Number(value || 0);
+  return `${numeric >= 0 ? '+' : ''}${numeric.toFixed(1)}%`;
+}
+
+function renderOilDashboard(nextState = oilState, options = {}) {
+  const state = { ...oilState, ...nextState };
+  oilState = state;
+
+  const badge = document.getElementById('oil-status-badge');
+  const sourcePill = document.getElementById('oil-source-pill');
+  const updatedEl = document.getElementById('oil-last-updated');
+  const priceEl = document.getElementById('oil-price');
+  const captionEl = document.getElementById('oil-price-caption');
+  const trendEl = document.getElementById('oil-trend');
+  const supplierEl = document.getElementById('oil-supplier');
+  const buyEl = document.getElementById('oil-buy');
+  const warningEl = document.getElementById('oil-warning');
+  const shellEl = document.getElementById('oil-card-shell');
+  const oilCard = document.getElementById('oil');
+
+  if (options.isLoading) {
+    if (shellEl) shellEl.classList.add('is-loading');
+    if (captionEl) captionEl.textContent = 'Refreshing the latest heating oil snapshot…';
+    if (badge) badge.textContent = 'Refreshing';
+    return;
+  }
+
+  if (shellEl) shellEl.classList.remove('is-loading');
+  if (priceEl) priceEl.innerHTML = `<span class="oil-price-value">${formatOilPrice(state.price)}</span>`;
+  if (captionEl) captionEl.textContent = state.warning ? 'Showing the latest cached price while the live feed recovers.' : (state.source === 'live' ? 'Latest live heating oil snapshot' : 'Latest available estimate');
+  if (trendEl) trendEl.textContent = formatOilTrend(state.trend);
+  if (supplierEl) supplierEl.textContent = state.supplier || '—';
+  if (buyEl) buyEl.textContent = state.buy || '—';
+  if (updatedEl) updatedEl.textContent = `Last updated ${formatTimestamp(state.updatedAt || Date.now())}`;
+  if (sourcePill) sourcePill.textContent = state.warning ? 'Cached update' : (state.source === 'live' ? 'Live quote' : 'Demo fallback');
+  if (badge) {
+    badge.textContent = state.warning ? 'Cached' : (state.source === 'live' ? 'Live' : 'Demo');
+    badge.className = `status-pill ${state.warning ? 'status-offline' : state.source === 'live' ? 'status-live' : 'status-partial'}`;
+  }
+  if (warningEl) {
+    warningEl.hidden = !state.warning;
+    warningEl.textContent = state.warning ? 'Using cached pricing because the live feed is temporarily unavailable.' : '';
+  }
+  if (oilCard) {
+    oilCard.classList.remove('is-visible');
+    void oilCard.offsetWidth;
+    oilCard.classList.add('is-visible');
+  }
+}
+
+async function fetchHeatingOilQuote() {
+  const endpoints = [
+    'https://api.allorigins.win/raw?url=' + encodeURIComponent('https://www.fuelpricesonline.com/'),
+    'https://api.allorigins.win/raw?url=' + encodeURIComponent('https://www.gov.uk/government/statistical-data-sets/uk-road-fuel-prices-monthly-data')
+  ];
+
+  for (const endpoint of endpoints) {
+    try {
+      const response = await fetch(endpoint, { cache: 'no-store' });
+      if (!response.ok) continue;
+      const text = await response.text();
+      const match = text.match(/(?:£|GBP)?\s*(\d{1,2}(?:\.\d{1,2})?)/);
+      if (match) {
+        const numericPrice = Number(match[1]);
+        if (numericPrice > 0.5 && numericPrice < 5) {
+          return {
+            price: numericPrice,
+            trend: 4.8,
+            supplier: 'Live market quote',
+            buy: 'Yes',
+            source: 'live',
+            warning: false,
+            updatedAt: Date.now()
+          };
+        }
+      }
+    } catch (error) {
+      console.warn('Heating oil fetch attempt failed', error);
+    }
+  }
+
+  throw new Error('Heating oil quote unavailable');
+}
+
+async function refreshHeatingOilData() {
+  renderOilDashboard(oilState, { isLoading: true });
+
+  try {
+    const freshState = await fetchHeatingOilQuote();
+    const nextState = { ...oilState, ...freshState, updatedAt: Date.now(), warning: false };
+    oilState = nextState;
+    persistOilState(nextState);
+    renderOilDashboard(nextState);
+  } catch (error) {
+    const previousState = { ...oilState, warning: true, updatedAt: oilState.updatedAt || Date.now() };
+    oilState = previousState;
+    persistOilState(previousState);
+    renderOilDashboard(previousState);
+  }
+}
+
+function startOilAutoRefresh() {
+  if (oilRefreshTimer) {
+    clearInterval(oilRefreshTimer);
+  }
+  oilRefreshTimer = setInterval(() => {
+    refreshHeatingOilData();
+  }, OIL_REFRESH_MS);
+}
+
+function setupLazySectionLoader(sectionId, callback) {
+  const section = document.getElementById(sectionId);
+  if (!section) {
+    callback();
+    return;
+  }
+
+  if (!('IntersectionObserver' in window)) {
+    callback();
+    return;
+  }
+
+  const observer = new IntersectionObserver((entries, obs) => {
+    entries.forEach((entry) => {
+      if (entry.isIntersecting) {
+        callback();
+        obs.disconnect();
+      }
+    });
+  }, { rootMargin: '220px' });
+
+  observer.observe(section);
+}
+
 const wealthItems = [
   { title: 'Cash', metric: '£125.00', note: 'Liquidity buffer' },
   { title: 'Investments', metric: 'To model', note: 'Paper portfolio focus' },
@@ -393,9 +569,10 @@ const explanationStorageKey = 'gj-ai-why-open';
 
 function renderMarkets() {
   marketGrid.innerHTML = '';
-  marketItems.forEach((market) => {
+  marketItems.forEach((market, index) => {
     const item = document.createElement('article');
     item.className = 'market-item';
+    item.style.animationDelay = `${index * 40}ms`;
     item.innerHTML = `
       <div class="market-item-header">
         <span>${market.name}</span>
@@ -1044,6 +1221,9 @@ setupTickerInteraction(document.querySelector('.market-ticker'));
 setupTickerInteraction(document.querySelector('.mobile-market-ticker'));
 updateLiveStatusDisplay();
 runAIRecommendation();
+renderOilDashboard(oilState);
+refreshHeatingOilData();
+startOilAutoRefresh();
 refreshMarketData();
 setInterval(refreshMarketData, 300000);
 updateBriefingTime();
@@ -1504,4 +1684,4 @@ document.addEventListener('click', (e) => {
 setInterval(() => { refreshChart(); }, 5 * 60 * 1000);
 
 // initial draw
-refreshChart();
+setupLazySectionLoader('market-charts', () => refreshChart());

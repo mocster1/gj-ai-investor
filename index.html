@@ -4,6 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="description" content="GJ AI Investor dashboard layout" />
+    <meta name="theme-color" content="#050816" />
     <title>GJ AI Wealth</title>
     <link rel="stylesheet" href="style.css" />
   </head>
@@ -490,26 +491,38 @@
             <div class="card-header">
               <div>
                 <p class="eyebrow">Heating Oil</p>
-                <h2>Preview</h2>
+                <h2>Live checker</h2>
               </div>
-              <span class="status-pill">Demo</span>
+              <span class="status-pill" id="oil-status-badge">Loading</span>
             </div>
             <div class="oil-preview">
-              <div class="oil-price">£1.38/l</div>
-              <p class="muted-text">Today’s price</p>
+              <div class="oil-summary-row">
+                <span class="oil-source-pill" id="oil-source-pill">Checking latest quote…</span>
+                <span class="oil-last-updated" id="oil-last-updated">Last updated —</span>
+              </div>
+              <div class="oil-card-shell" id="oil-card-shell" aria-live="polite">
+                <div class="oil-price" id="oil-price">
+                  <div class="oil-skeleton" aria-hidden="true">
+                    <span class="skeleton-line"></span>
+                    <span class="skeleton-line short"></span>
+                  </div>
+                </div>
+                <p class="muted-text" id="oil-price-caption">Preparing the latest heating oil snapshot…</p>
+              </div>
+              <div class="oil-warning" id="oil-warning" role="status" hidden>Using cached pricing because the live feed is temporarily unavailable.</div>
               <div class="oil-meta">
                 <div>
                   <span>30-day trend</span>
-                  <strong>+4.8%</strong>
+                  <strong id="oil-trend">—</strong>
                 </div>
                 <div>
                   <span>Best supplier</span>
-                  <strong>DJ Davies Fuels</strong>
+                  <strong id="oil-supplier">—</strong>
                 </div>
               </div>
               <div class="oil-footer">
                 <span>Buy today?</span>
-                <strong>Yes</strong>
+                <strong id="oil-buy">—</strong>
               </div>
             </div>
           </section>
@@ -537,7 +550,7 @@
       </div>
     </div>
 
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <script src="script.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js" defer></script>
+    <script src="script.js" defer></script>
   </body>
 </html>
