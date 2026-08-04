@@ -1,12 +1,9 @@
-import { CONFIG } from './config.js';
-
 const CACHE_TTL_MS = 15 * 60 * 1000;
 const REQUEST_WINDOW_MS = 60 * 1000;
 const MAX_REQUESTS_PER_WINDOW = 8;
 const REQUEST_HISTORY = [];
 const TWELVE_DATA_QUOTE_URL = 'https://api.twelvedata.com/quote';
-const SECURE_PROXY_URL =
-  'https://gjwealth-market-proxy.gerallt-jones.workers.dev';
+const SECURE_PROXY_URL = 'https://gjwealth-market-proxy.gerallt-jones.workers.dev/quote';
 const ENABLED_SYMBOLS = [
   { id: 'aapl', name: 'Apple', symbol: 'AAPL', kind: 'stock' },
   { id: 'sp500', name: 'S&P 500', symbol: 'SPY', kind: 'etf', note: 'ETF proxy' },
@@ -22,30 +19,54 @@ const PRIORITY_SYMBOLS = ['AAPL'];
 let LAST_ERROR = null;
 const CACHE = new Map();
 let lastFetchAt = 0;
-
-function getApiKey() {
-  const apiKey = typeof CONFIG?.TWELVE_DATA_API_KEY === 'string' ? CONFIG.TWELVE_DATA_API_KEY.trim() : '';
-  return apiKey;
-}
+let localConfig = null;
+let localConfigLoadAttempted = false;
 
 function isLocalhostEnvironment() {
   if (typeof window === 'undefined' || !window.location) {
     return false;
   }
   const host = window.location.hostname;
-  return host === 'localhost' || host === '127.0.0.1' || host === '[::1]';
+  return host === 'localhost' || host === '127.0.0.1';
 }
 
-function getQuoteEndpointUrl(symbol) {
+async function loadLocalConfig() {
+  if (!isLocalhostEnvironment()) {
+    return null;
+  }
+
+  if (localConfigLoadAttempted) {
+    return localConfig;
+  }
+
+  localConfigLoadAttempted = true;
+
+  try {
+    const module = await import('./config.js');
+    localConfig = module?.CONFIG || null;
+  } catch (error) {
+    localConfig = null;
+  }
+
+  return localConfig;
+}
+
+async function getApiKey() {
+  const config = await loadLocalConfig();
+  const apiKey = typeof config?.TWELVE_DATA_API_KEY === 'string' ? config.TWELVE_DATA_API_KEY.trim() : '';
+  return apiKey;
+}
+
+async function getQuoteEndpointUrl(symbol) {
   if (isLocalhostEnvironment()) {
-    const url = new URL(TWELVE_DATA_QUOTE_URL);
-    url.searchParams.set('symbol', symbol);
-    url.searchParams.set('interval', '1h');
-    const apiKey = getApiKey();
+    const apiKey = await getApiKey();
     if (apiKey) {
+      const url = new URL(TWELVE_DATA_QUOTE_URL);
+      url.searchParams.set('symbol', symbol);
+      url.searchParams.set('interval', '1h');
       url.searchParams.set('apikey', apiKey);
+      return url.toString();
     }
-    return url.toString();
   }
 
   const url = new URL(SECURE_PROXY_URL);
@@ -55,6 +76,30 @@ function getQuoteEndpointUrl(symbol) {
 
 function redactUrl(url) {
   return url.replace(/apikey=[^&]+/i, 'apikey=[REDACTED]');
+}
+
+function sanitizeErrorResponse(responseText) {
+  const trimmed = typeof responseText === 'string' ? responseText.trim() : '';
+  if (!trimmed) {
+    return null;
+  }
+
+  try {
+    const parsed = JSON.parse(trimmed);
+    if (parsed && typeof parsed === 'object') {
+      if (typeof parsed.error === 'string') {
+        return parsed.error;
+      }
+      if (typeof parsed.message === 'string') {
+        return parsed.message;
+      }
+      return parsed;
+    }
+  } catch (error) {
+    // Ignore JSON parse errors and fall back to the original text.
+  }
+
+  return trimmed.length > 240 ? `${trimmed.slice(0, 237)}...` : trimmed;
 }
 
 function toNumber(value) {
@@ -136,7 +181,13 @@ async function requestJson(url, { symbol, label }) {
 
     if (!response.ok) {
       const message = `Twelve Data request failed for ${symbol}: ${response.status}`;
-      LAST_ERROR = { symbol, requestUrl, message, responseText };
+      const responseBody = sanitizeErrorResponse(responseText);
+      console.error('[Market data] request failed', {
+        status: response.status,
+        url: requestUrl,
+        response: responseBody
+      });
+      LAST_ERROR = { symbol, requestUrl, message, response: responseBody };
       throw new Error(message);
     }
 
@@ -145,7 +196,7 @@ async function requestJson(url, { symbol, label }) {
       payload = JSON.parse(responseText);
     } catch (error) {
       const message = `Invalid Twelve Data response for ${symbol}`;
-      LAST_ERROR = { symbol, requestUrl, message, responseText };
+      LAST_ERROR = { symbol, requestUrl, message, response: sanitizeErrorResponse(responseText) };
       throw new Error(message);
     }
 
@@ -156,7 +207,7 @@ async function requestJson(url, { symbol, label }) {
       throw error;
     }
     if (label) {
-      console.error(`[Twelve Data] ${label} error for ${symbol}:`, error);
+      console.error(`[Market data] ${label} error for ${symbol}:`, error);
     }
     LAST_ERROR = { symbol, requestUrl, message: error?.message || 'Unknown Twelve Data error' };
     throw error;
@@ -164,7 +215,7 @@ async function requestJson(url, { symbol, label }) {
 }
 
 async function fetchQuote(symbol) {
-  const endpointUrl = getQuoteEndpointUrl(symbol);
+  const endpointUrl = await getQuoteEndpointUrl(symbol);
   const { payload } = await requestJson(endpointUrl, { symbol, label: 'quote' });
 
   if (!payload || payload.error) {
