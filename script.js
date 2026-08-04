@@ -20,26 +20,25 @@ const liveState = {
 
 const OIL_STORAGE_KEY = 'gj_oil_dashboard_v1';
 const OIL_REFRESH_MS = 15 * 60 * 1000;
-const OIL_FALLBACK = {
-  price: 1.38,
-  trend: 4.8,
-  supplier: 'DJ Davies Fuels',
-  buy: 'Yes',
-  source: 'demo',
-  updatedAt: Date.now(),
-  warning: false
+const OIL_SAMPLE_DATA_URL = './oil-data.json';
+const OIL_REGION_LABELS = {
+  ukAverage: 'UK Average',
+  england: 'England',
+  wales: 'Wales',
+  scotland: 'Scotland'
 };
 
-let oilState = loadOilStateFromStorage() || { ...OIL_FALLBACK };
-persistOilState(oilState);
+let oilState = null;
 let oilRefreshTimer = null;
+let oilChartInstance = null;
+let oilActiveRegion = 'ukAverage';
 
 function loadOilStateFromStorage() {
   try {
     const raw = localStorage.getItem(OIL_STORAGE_KEY);
     if (!raw) return null;
     const parsed = JSON.parse(raw);
-    if (!parsed || typeof parsed.price !== 'number') return null;
+    if (!parsed || typeof parsed.averagePencePerLitre !== 'number') return null;
     return parsed;
   } catch (error) {
     console.warn('Unable to read cached heating oil state', error);
@@ -55,13 +54,212 @@ function persistOilState(state) {
   }
 }
 
-function formatOilPrice(value) {
-  return `£${Number(value).toFixed(2)}/l`;
+function formatPencePerLitre(value) {
+  return `${Number(value).toFixed(1)} p/l`;
 }
 
-function formatOilTrend(value) {
+function formatSignedPence(value) {
   const numeric = Number(value || 0);
-  return `${numeric >= 0 ? '+' : ''}${numeric.toFixed(1)}%`;
+  return `${numeric >= 0 ? '+' : ''}${numeric.toFixed(1)} p`;
+}
+
+function getTrendDirection(value) {
+  const numeric = Number(value || 0);
+  if (numeric > 0) return '↑';
+  if (numeric < 0) return '↓';
+  return '→';
+}
+
+function getTrendLabel(value) {
+  const numeric = Number(value || 0);
+  if (numeric > 0) return 'rising';
+  if (numeric < 0) return 'falling';
+  return 'unchanged';
+}
+
+function createOilSummary(data, region = 'ukAverage') {
+  const series = data.series?.[region] || [];
+  const latest = series[series.length - 1];
+  const previous = series[series.length - 2];
+  const weekAgo = series[series.length - 8] || series[0];
+  const average = series.reduce((sum, point) => sum + point.value, 0) / Math.max(1, series.length);
+  const lowest = Math.min(...series.map((point) => point.value));
+  const highest = Math.max(...series.map((point) => point.value));
+  const dailyChange = latest && previous ? latest.value - previous.value : 0;
+  const weeklyChange = latest && weekAgo ? latest.value - weekAgo.value : 0;
+
+  return {
+    region,
+    regionLabel: OIL_REGION_LABELS[region] || region,
+    averagePencePerLitre: Number(average.toFixed(1)),
+    lowestPencePerLitre: Number(lowest.toFixed(1)),
+    highestPencePerLitre: Number(highest.toFixed(1)),
+    dailyChangePence: Number(dailyChange.toFixed(1)),
+    weeklyChangePence: Number(weeklyChange.toFixed(1)),
+    currentPencePerLitre: Number((latest?.value || 0).toFixed(1)),
+    updatedAt: data.updatedAt || Date.now(),
+    source: data.source || 'sample',
+    series,
+    warning: false
+  };
+}
+
+async function loadHeatingOilData() {
+  try {
+    const response = await fetch(OIL_SAMPLE_DATA_URL, { cache: 'no-store' });
+    if (!response.ok) {
+      throw new Error(`Sample data request failed (${response.status})`);
+    }
+    const payload = await response.json();
+    return payload;
+  } catch (error) {
+    console.warn('Falling back to built-in sample heating oil data', error);
+    return {
+      source: 'sample',
+      updatedAt: Date.now(),
+      summary: {
+        averagePencePerLitre: 139.8,
+        lowestPencePerLitre: 132.9,
+        highestPencePerLitre: 145.6,
+        dailyChangePence: 1.4,
+        weeklyChangePence: 4.8
+      },
+      series: {
+        ukAverage: [
+          { date: '2026-07-05', value: 136.2 },
+          { date: '2026-07-06', value: 136.5 },
+          { date: '2026-07-07', value: 137.1 },
+          { date: '2026-07-08', value: 137.6 },
+          { date: '2026-07-09', value: 138.2 },
+          { date: '2026-07-10', value: 138.7 },
+          { date: '2026-07-11', value: 139.1 },
+          { date: '2026-07-12', value: 139.6 },
+          { date: '2026-07-13', value: 140.1 },
+          { date: '2026-07-14', value: 140.8 },
+          { date: '2026-07-15', value: 141.2 },
+          { date: '2026-07-16', value: 141.7 },
+          { date: '2026-07-17', value: 142.1 },
+          { date: '2026-07-18', value: 142.4 },
+          { date: '2026-07-19', value: 142.9 },
+          { date: '2026-07-20', value: 143.2 },
+          { date: '2026-07-21', value: 143.7 },
+          { date: '2026-07-22', value: 144.0 },
+          { date: '2026-07-23', value: 144.4 },
+          { date: '2026-07-24', value: 144.8 },
+          { date: '2026-07-25', value: 145.1 },
+          { date: '2026-07-26', value: 145.3 },
+          { date: '2026-07-27', value: 145.6 },
+          { date: '2026-07-28', value: 145.2 },
+          { date: '2026-07-29', value: 144.9 },
+          { date: '2026-07-30', value: 144.4 },
+          { date: '2026-07-31', value: 143.8 },
+          { date: '2026-08-01', value: 142.9 },
+          { date: '2026-08-02', value: 141.8 },
+          { date: '2026-08-03', value: 140.7 },
+          { date: '2026-08-04', value: 139.8 }
+        ],
+        england: [
+          { date: '2026-07-05', value: 135.4 },
+          { date: '2026-07-06', value: 135.8 },
+          { date: '2026-07-07', value: 136.3 },
+          { date: '2026-07-08', value: 136.9 },
+          { date: '2026-07-09', value: 137.3 },
+          { date: '2026-07-10', value: 137.9 },
+          { date: '2026-07-11', value: 138.3 },
+          { date: '2026-07-12', value: 138.9 },
+          { date: '2026-07-13', value: 139.4 },
+          { date: '2026-07-14', value: 139.9 },
+          { date: '2026-07-15', value: 140.5 },
+          { date: '2026-07-16', value: 140.9 },
+          { date: '2026-07-17', value: 141.3 },
+          { date: '2026-07-18', value: 141.7 },
+          { date: '2026-07-19', value: 142.1 },
+          { date: '2026-07-20', value: 142.6 },
+          { date: '2026-07-21', value: 143.0 },
+          { date: '2026-07-22', value: 143.4 },
+          { date: '2026-07-23', value: 143.8 },
+          { date: '2026-07-24', value: 144.1 },
+          { date: '2026-07-25', value: 144.5 },
+          { date: '2026-07-26', value: 144.8 },
+          { date: '2026-07-27', value: 145.2 },
+          { date: '2026-07-28', value: 144.8 },
+          { date: '2026-07-29', value: 144.2 },
+          { date: '2026-07-30', value: 143.7 },
+          { date: '2026-07-31', value: 142.9 },
+          { date: '2026-08-01', value: 142.0 },
+          { date: '2026-08-02', value: 141.1 },
+          { date: '2026-08-03', value: 140.2 },
+          { date: '2026-08-04', value: 139.1 }
+        ],
+        wales: [
+          { date: '2026-07-05', value: 138.8 },
+          { date: '2026-07-06', value: 139.2 },
+          { date: '2026-07-07', value: 139.7 },
+          { date: '2026-07-08', value: 140.0 },
+          { date: '2026-07-09', value: 140.4 },
+          { date: '2026-07-10', value: 140.9 },
+          { date: '2026-07-11', value: 141.3 },
+          { date: '2026-07-12', value: 141.9 },
+          { date: '2026-07-13', value: 142.3 },
+          { date: '2026-07-14', value: 142.8 },
+          { date: '2026-07-15', value: 143.2 },
+          { date: '2026-07-16', value: 143.7 },
+          { date: '2026-07-17', value: 144.1 },
+          { date: '2026-07-18', value: 144.6 },
+          { date: '2026-07-19', value: 145.0 },
+          { date: '2026-07-20', value: 145.3 },
+          { date: '2026-07-21', value: 145.9 },
+          { date: '2026-07-22', value: 146.2 },
+          { date: '2026-07-23', value: 146.7 },
+          { date: '2026-07-24', value: 147.0 },
+          { date: '2026-07-25', value: 147.4 },
+          { date: '2026-07-26', value: 147.7 },
+          { date: '2026-07-27', value: 148.1 },
+          { date: '2026-07-28', value: 147.8 },
+          { date: '2026-07-29', value: 147.4 },
+          { date: '2026-07-30', value: 146.9 },
+          { date: '2026-07-31', value: 146.3 },
+          { date: '2026-08-01', value: 145.6 },
+          { date: '2026-08-02', value: 144.9 },
+          { date: '2026-08-03', value: 144.0 },
+          { date: '2026-08-04', value: 143.0 }
+        ],
+        scotland: [
+          { date: '2026-07-05', value: 137.6 },
+          { date: '2026-07-06', value: 138.0 },
+          { date: '2026-07-07', value: 138.4 },
+          { date: '2026-07-08', value: 138.8 },
+          { date: '2026-07-09', value: 139.2 },
+          { date: '2026-07-10', value: 139.6 },
+          { date: '2026-07-11', value: 140.0 },
+          { date: '2026-07-12', value: 140.4 },
+          { date: '2026-07-13', value: 141.0 },
+          { date: '2026-07-14', value: 141.4 },
+          { date: '2026-07-15', value: 141.8 },
+          { date: '2026-07-16', value: 142.2 },
+          { date: '2026-07-17', value: 142.6 },
+          { date: '2026-07-18', value: 142.9 },
+          { date: '2026-07-19', value: 143.3 },
+          { date: '2026-07-20', value: 143.7 },
+          { date: '2026-07-21', value: 144.1 },
+          { date: '2026-07-22', value: 144.4 },
+          { date: '2026-07-23', value: 144.8 },
+          { date: '2026-07-24', value: 145.2 },
+          { date: '2026-07-25', value: 145.6 },
+          { date: '2026-07-26', value: 145.9 },
+          { date: '2026-07-27', value: 146.3 },
+          { date: '2026-07-28', value: 146.0 },
+          { date: '2026-07-29', value: 145.6 },
+          { date: '2026-07-30', value: 145.2 },
+          { date: '2026-07-31', value: 144.7 },
+          { date: '2026-08-01', value: 144.0 },
+          { date: '2026-08-02', value: 143.3 },
+          { date: '2026-08-03', value: 142.4 },
+          { date: '2026-08-04', value: 141.2 }
+        ]
+      }
+    };
+  }
 }
 
 function renderOilDashboard(nextState = oilState, options = {}) {
@@ -73,31 +271,37 @@ function renderOilDashboard(nextState = oilState, options = {}) {
   const updatedEl = document.getElementById('oil-last-updated');
   const priceEl = document.getElementById('oil-price');
   const captionEl = document.getElementById('oil-price-caption');
-  const trendEl = document.getElementById('oil-trend');
-  const supplierEl = document.getElementById('oil-supplier');
-  const buyEl = document.getElementById('oil-buy');
   const warningEl = document.getElementById('oil-warning');
   const shellEl = document.getElementById('oil-card-shell');
   const oilCard = document.getElementById('oil');
+  const averageEl = document.getElementById('oil-average');
+  const lowestEl = document.getElementById('oil-lowest');
+  const highestEl = document.getElementById('oil-highest');
+  const dailyChangeEl = document.getElementById('oil-daily-change');
+  const weeklyChangeEl = document.getElementById('oil-weekly-change');
+  const trendEl = document.getElementById('oil-trend');
 
   if (options.isLoading) {
     if (shellEl) shellEl.classList.add('is-loading');
-    if (captionEl) captionEl.textContent = 'Refreshing the latest heating oil snapshot…';
+    if (captionEl) captionEl.textContent = 'Refreshing the latest UK heating oil snapshot…';
     if (badge) badge.textContent = 'Refreshing';
     return;
   }
 
   if (shellEl) shellEl.classList.remove('is-loading');
-  if (priceEl) priceEl.innerHTML = `<span class="oil-price-value">${formatOilPrice(state.price)}</span>`;
-  if (captionEl) captionEl.textContent = state.warning ? 'Showing the latest cached price while the live feed recovers.' : (state.source === 'live' ? 'Latest live heating oil snapshot' : 'Latest available estimate');
-  if (trendEl) trendEl.textContent = formatOilTrend(state.trend);
-  if (supplierEl) supplierEl.textContent = state.supplier || '—';
-  if (buyEl) buyEl.textContent = state.buy || '—';
+  if (priceEl) priceEl.innerHTML = `<span class="oil-price-value">${formatPencePerLitre(state.currentPencePerLitre)}</span>`;
+  if (captionEl) captionEl.textContent = `${state.regionLabel} • ${state.source === 'live' ? 'Live feed' : 'Sample data'} • updated ${new Date(state.updatedAt).toLocaleString('en-GB', { hour: '2-digit', minute: '2-digit' })}`;
+  if (averageEl) averageEl.textContent = formatPencePerLitre(state.averagePencePerLitre);
+  if (lowestEl) lowestEl.textContent = formatPencePerLitre(state.lowestPencePerLitre);
+  if (highestEl) highestEl.textContent = formatPencePerLitre(state.highestPencePerLitre);
+  if (dailyChangeEl) dailyChangeEl.textContent = `${state.dailyChangePence >= 0 ? '+' : ''}${state.dailyChangePence.toFixed(1)} p`;
+  if (weeklyChangeEl) weeklyChangeEl.textContent = `${state.weeklyChangePence >= 0 ? '+' : ''}${state.weeklyChangePence.toFixed(1)} p`;
+  if (trendEl) trendEl.textContent = `${getTrendDirection(state.dailyChangePence)} ${getTrendLabel(state.dailyChangePence)}`;
   if (updatedEl) updatedEl.textContent = `Last updated ${formatTimestamp(state.updatedAt || Date.now())}`;
-  if (sourcePill) sourcePill.textContent = state.warning ? 'Cached update' : (state.source === 'live' ? 'Live quote' : 'Demo fallback');
+  if (sourcePill) sourcePill.textContent = state.source === 'live' ? 'Live UK quote' : 'Local sample data';
   if (badge) {
-    badge.textContent = state.warning ? 'Cached' : (state.source === 'live' ? 'Live' : 'Demo');
-    badge.className = `status-pill ${state.warning ? 'status-offline' : state.source === 'live' ? 'status-live' : 'status-partial'}`;
+    badge.textContent = state.source === 'live' ? 'Live' : 'Sample';
+    badge.className = `status-pill ${state.source === 'live' ? 'status-live' : 'status-partial'}`;
   }
   if (warningEl) {
     warningEl.hidden = !state.warning;
@@ -110,51 +314,74 @@ function renderOilDashboard(nextState = oilState, options = {}) {
   }
 }
 
-async function fetchHeatingOilQuote() {
-  const endpoints = [
-    'https://api.allorigins.win/raw?url=' + encodeURIComponent('https://www.fuelpricesonline.com/'),
-    'https://api.allorigins.win/raw?url=' + encodeURIComponent('https://www.gov.uk/government/statistical-data-sets/uk-road-fuel-prices-monthly-data')
-  ];
+function drawOilChart(series, region) {
+  const canvas = document.getElementById('oil-chart-canvas');
+  if (!canvas) return;
 
-  for (const endpoint of endpoints) {
-    try {
-      const response = await fetch(endpoint, { cache: 'no-store' });
-      if (!response.ok) continue;
-      const text = await response.text();
-      const match = text.match(/(?:£|GBP)?\s*(\d{1,2}(?:\.\d{1,2})?)/);
-      if (match) {
-        const numericPrice = Number(match[1]);
-        if (numericPrice > 0.5 && numericPrice < 5) {
-          return {
-            price: numericPrice,
-            trend: 4.8,
-            supplier: 'Live market quote',
-            buy: 'Yes',
-            source: 'live',
-            warning: false,
-            updatedAt: Date.now()
-          };
-        }
-      }
-    } catch (error) {
-      console.warn('Heating oil fetch attempt failed', error);
-    }
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return;
+
+  const labels = series.map((point) => point.date);
+  const data = series.map((point) => point.value);
+  const color = getComputedStyle(document.documentElement).getPropertyValue('--accent') || '#4cc9f0';
+  const isDark = getComputedStyle(document.documentElement).colorScheme === 'dark';
+
+  if (oilChartInstance) {
+    oilChartInstance.destroy();
   }
 
-  throw new Error('Heating oil quote unavailable');
+  oilChartInstance = new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels,
+      datasets: [{
+        label: `${region} trend`,
+        data,
+        borderColor: color.trim(),
+        backgroundColor: isDark ? 'rgba(76, 201, 240, 0.15)' : 'rgba(76, 201, 240, 0.08)',
+        fill: true,
+        tension: 0.3,
+        pointRadius: 0,
+        borderWidth: 2
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      animation: { duration: 450 },
+      plugins: { legend: { display: false } },
+      scales: {
+        x: { ticks: { color: 'var(--muted)', maxRotation: 0, autoSkip: true }, grid: { color: 'rgba(255,255,255,0.06)' } },
+        y: { ticks: { color: 'var(--muted)' }, grid: { color: 'rgba(255,255,255,0.06)' } }
+      }
+    }
+  });
+}
+
+function updateOilRegion(region) {
+  oilActiveRegion = region;
+  document.querySelectorAll('.oil-filter').forEach((button) => {
+    button.classList.toggle('active', button.getAttribute('data-oil-region') === region);
+  });
+  if (oilState && oilState.series) {
+    drawOilChart(oilState.series[region] || [], OIL_REGION_LABELS[region] || region);
+    renderOilDashboard({ region, regionLabel: OIL_REGION_LABELS[region] || region, currentPencePerLitre: oilState.series[region]?.slice(-1)[0]?.value || 0, averagePencePerLitre: oilState.averagePencePerLitre || oilState.summary?.averagePencePerLitre, lowestPencePerLitre: oilState.lowestPencePerLitre || oilState.summary?.lowestPencePerLitre, highestPencePerLitre: oilState.highestPencePerLitre || oilState.summary?.highestPencePerLitre, dailyChangePence: oilState.dailyChangePence || oilState.summary?.dailyChangePence, weeklyChangePence: oilState.weeklyChangePence || oilState.summary?.weeklyChangePence, updatedAt: oilState.updatedAt, source: oilState.source });
+  }
 }
 
 async function refreshHeatingOilData() {
-  renderOilDashboard(oilState, { isLoading: true });
+  renderOilDashboard({ ...oilState, warning: false }, { isLoading: true });
 
   try {
-    const freshState = await fetchHeatingOilQuote();
-    const nextState = { ...oilState, ...freshState, updatedAt: Date.now(), warning: false };
+    const payload = await loadHeatingOilData();
+    const summary = createOilSummary(payload, oilActiveRegion);
+    const nextState = { ...payload, ...summary, summary: payload.summary || summary };
     oilState = nextState;
     persistOilState(nextState);
     renderOilDashboard(nextState);
+    drawOilChart(nextState.series[oilActiveRegion] || [], OIL_REGION_LABELS[oilActiveRegion] || oilActiveRegion);
   } catch (error) {
-    const previousState = { ...oilState, warning: true, updatedAt: oilState.updatedAt || Date.now() };
+    const previousState = { ...(oilState || {}), warning: true, updatedAt: (oilState && oilState.updatedAt) || Date.now() };
     oilState = previousState;
     persistOilState(previousState);
     renderOilDashboard(previousState);

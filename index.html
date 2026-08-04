@@ -491,13 +491,13 @@
             <div class="card-header">
               <div>
                 <p class="eyebrow">Heating Oil</p>
-                <h2>Live checker</h2>
+                <h2>UK live tracker</h2>
               </div>
               <span class="status-pill" id="oil-status-badge">Loading</span>
             </div>
             <div class="oil-preview">
               <div class="oil-summary-row">
-                <span class="oil-source-pill" id="oil-source-pill">Checking latest quote…</span>
+                <span class="oil-source-pill" id="oil-source-pill">Loading live data…</span>
                 <span class="oil-last-updated" id="oil-last-updated">Last updated —</span>
               </div>
               <div class="oil-card-shell" id="oil-card-shell" aria-live="polite">
@@ -507,22 +507,43 @@
                     <span class="skeleton-line short"></span>
                   </div>
                 </div>
-                <p class="muted-text" id="oil-price-caption">Preparing the latest heating oil snapshot…</p>
+                <p class="muted-text" id="oil-price-caption">Loading the latest UK heating oil snapshot…</p>
               </div>
-              <div class="oil-warning" id="oil-warning" role="status" hidden>Using cached pricing because the live feed is temporarily unavailable.</div>
-              <div class="oil-meta">
-                <div>
-                  <span>30-day trend</span>
+              <div class="oil-warning" id="oil-warning" role="status" hidden></div>
+              <div class="oil-filter-group" role="group" aria-label="Heating oil region filter">
+                <button class="ghost-btn oil-filter active" type="button" data-oil-region="ukAverage">UK Average</button>
+                <button class="ghost-btn oil-filter" type="button" data-oil-region="england">England</button>
+                <button class="ghost-btn oil-filter" type="button" data-oil-region="wales">Wales</button>
+                <button class="ghost-btn oil-filter" type="button" data-oil-region="scotland">Scotland</button>
+              </div>
+              <div class="oil-metrics-grid">
+                <div class="oil-metric-card">
+                  <span>Average</span>
+                  <strong id="oil-average">—</strong>
+                </div>
+                <div class="oil-metric-card">
+                  <span>Lowest</span>
+                  <strong id="oil-lowest">—</strong>
+                </div>
+                <div class="oil-metric-card">
+                  <span>Highest</span>
+                  <strong id="oil-highest">—</strong>
+                </div>
+                <div class="oil-metric-card">
+                  <span>Daily change</span>
+                  <strong id="oil-daily-change">—</strong>
+                </div>
+                <div class="oil-metric-card">
+                  <span>Weekly change</span>
+                  <strong id="oil-weekly-change">—</strong>
+                </div>
+                <div class="oil-metric-card oil-trend-card">
+                  <span>Trend</span>
                   <strong id="oil-trend">—</strong>
                 </div>
-                <div>
-                  <span>Best supplier</span>
-                  <strong id="oil-supplier">—</strong>
-                </div>
               </div>
-              <div class="oil-footer">
-                <span>Buy today?</span>
-                <strong id="oil-buy">—</strong>
+              <div class="oil-chart-card">
+                <canvas id="oil-chart-canvas" aria-label="Heating oil price trend chart"></canvas>
               </div>
             </div>
           </section>
