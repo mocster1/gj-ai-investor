@@ -1,14 +1,111 @@
 const marketItems = [
-  { id: 'ftse', name: 'FTSE 100', value: '8,210', change: '+0.4%', direction: 'up', status: 'demo' },
-  { id: 'sp500', name: 'S&P 500', value: '6,180', change: '+0.7%', direction: 'up', status: 'demo' },
-  { id: 'nasdaq', name: 'NASDAQ', value: '20,340', change: '+1.1%', direction: 'up', status: 'demo' },
-  { id: 'bitcoin', name: 'Bitcoin', value: '£91,420', change: '-1.8%', direction: 'down', status: 'demo' },
-  { id: 'ethereum', name: 'Ethereum', value: '£3,240', change: '+0.6%', direction: 'up', status: 'demo' },
-  { id: 'gold', name: 'Gold', value: '£2,640', change: '+0.1%', direction: 'up', status: 'demo' },
-  { id: 'silver', name: 'Silver', value: '£29.40', change: '-0.3%', direction: 'down', status: 'demo' },
-  { id: 'brent', name: 'Brent Oil', value: '$78.40', change: '+2.3%', direction: 'up', status: 'demo' },
-  { id: 'gbpUsd', name: 'GBP/USD', value: '1.27', change: '', direction: 'neutral', status: 'demo' }
+  { id: 'ftse', name: 'FTSE 100', value: '—', change: '—', direction: 'neutral', status: 'delayed' },
+  { id: 'sp500', name: 'S&P 500', value: '—', change: '—', direction: 'neutral', status: 'delayed' },
+  { id: 'nasdaq', name: 'NASDAQ', value: '—', change: '—', direction: 'neutral', status: 'delayed' },
+  { id: 'dowJones', name: 'Dow Jones', value: '—', change: '—', direction: 'neutral', status: 'delayed' },
+  { id: 'bitcoin', name: 'Bitcoin', value: '—', change: '—', direction: 'neutral', status: 'delayed' },
+  { id: 'gold', name: 'Gold', value: '—', change: '—', direction: 'neutral', status: 'delayed' },
+  { id: 'silver', name: 'Silver', value: '—', change: '—', direction: 'neutral', status: 'delayed' },
+  { id: 'brent', name: 'Brent Crude', value: '—', change: '—', direction: 'neutral', status: 'delayed' },
+  { id: 'gbpUsd', name: 'GBP/USD', value: '—', change: '—', direction: 'neutral', status: 'delayed' },
+  { id: 'eurUsd', name: 'EUR/USD', value: '—', change: '—', direction: 'neutral', status: 'delayed' }
 ];
+
+const MARKET_STATUS_STORAGE_KEY = 'gj_market_status_v1';
+let lastSuccessfulMarketSnapshot = null;
+let marketDataStatus = 'delayed';
+
+function persistMarketStatus(status) {
+  try {
+    localStorage.setItem(MARKET_STATUS_STORAGE_KEY, JSON.stringify({ status, timestamp: Date.now() }));
+  } catch (error) {
+    console.warn('Unable to save market status', error);
+  }
+}
+
+function loadMarketStatus() {
+  try {
+    const raw = localStorage.getItem(MARKET_STATUS_STORAGE_KEY);
+    if (!raw) return null;
+    return JSON.parse(raw);
+  } catch (error) {
+    console.warn('Unable to load market status', error);
+    return null;
+  }
+}
+
+function setDelayedMarketStatus(errorDetail = null) {
+  marketDataStatus = 'delayed';
+  marketItems.forEach((item) => {
+    if (item.status !== 'closed') {
+      item.status = 'delayed';
+    }
+  });
+  persistMarketStatus(marketDataStatus);
+  if (errorDetail) {
+    console.error('[Market UI] Data refresh failed:', errorDetail);
+  }
+}
+
+function applyMarketSnapshot(snapshot) {
+  if (!snapshot || !snapshot.data) {
+    return false;
+  }
+
+  const saved = loadMarketStatus();
+  if (saved && Date.now() - saved.timestamp > 5 * 60 * 1000) {
+    marketDataStatus = 'delayed';
+  }
+
+  const entries = Object.entries(snapshot.data);
+  entries.forEach(([id, data]) => {
+    if (!data) return;
+    const item = marketItems.find((entry) => entry.id === id);
+    if (!item) return;
+
+    const nextStatus = data.status === 'closed' ? 'closed' : 'live';
+    const nextValue = data.value || '—';
+    const nextChange = data.change ? data.change.change : '—';
+    const nextDirection = data.change ? data.change.direction : 'neutral';
+
+    Object.assign(item, {
+      value: nextValue,
+      change: nextChange,
+      direction: nextDirection,
+      status: nextStatus
+    });
+
+    if (nextStatus === 'live') {
+      lastSuccessfulMarketSnapshot = snapshot;
+      marketDataStatus = 'live';
+      persistMarketStatus(marketDataStatus);
+    } else if (nextStatus === 'closed') {
+      marketDataStatus = 'closed';
+      persistMarketStatus(marketDataStatus);
+    }
+  });
+
+  return true;
+}
+
+function renderMarkets() {
+  marketGrid.innerHTML = '';
+  marketItems.forEach((market, index) => {
+    const item = document.createElement('article');
+    item.className = 'market-item';
+    item.style.animationDelay = `${index * 40}ms`;
+    const statusLabel = market.status === 'live' ? 'LIVE' : market.status === 'closed' ? 'MARKET CLOSED' : 'DELAYED';
+    item.innerHTML = `
+      <div class="market-item-header">
+        <span>${market.name}</span>
+        <span class="market-item-status ${market.status === 'live' ? 'live' : market.status === 'closed' ? 'closed' : 'delayed'}">${statusLabel}</span>
+      </div>
+      <strong>${market.value}</strong>
+      <span class="market-change ${market.direction === 'down' ? 'negative' : market.direction === 'up' ? 'positive' : 'neutral'}">${market.change || '—'}</span>
+    `;
+    marketGrid.appendChild(item);
+  });
+}
 
 const liveState = {
   bitcoin: false,
@@ -288,15 +385,18 @@ function renderOilDashboard(nextState = oilState, options = {}) {
     return;
   }
 
+  const dailyChangePence = Number(state.dailyChangePence || 0);
+  const weeklyChangePence = Number(state.weeklyChangePence || 0);
+
   if (shellEl) shellEl.classList.remove('is-loading');
-  if (priceEl) priceEl.innerHTML = `<span class="oil-price-value">${formatPencePerLitre(state.currentPencePerLitre)}</span>`;
-  if (captionEl) captionEl.textContent = `${state.regionLabel} • ${state.source === 'live' ? 'Live feed' : 'Sample data'} • updated ${new Date(state.updatedAt).toLocaleString('en-GB', { hour: '2-digit', minute: '2-digit' })}`;
-  if (averageEl) averageEl.textContent = formatPencePerLitre(state.averagePencePerLitre);
-  if (lowestEl) lowestEl.textContent = formatPencePerLitre(state.lowestPencePerLitre);
-  if (highestEl) highestEl.textContent = formatPencePerLitre(state.highestPencePerLitre);
-  if (dailyChangeEl) dailyChangeEl.textContent = `${state.dailyChangePence >= 0 ? '+' : ''}${state.dailyChangePence.toFixed(1)} p`;
-  if (weeklyChangeEl) weeklyChangeEl.textContent = `${state.weeklyChangePence >= 0 ? '+' : ''}${state.weeklyChangePence.toFixed(1)} p`;
-  if (trendEl) trendEl.textContent = `${getTrendDirection(state.dailyChangePence)} ${getTrendLabel(state.dailyChangePence)}`;
+  if (priceEl) priceEl.innerHTML = `<span class="oil-price-value">${formatPencePerLitre(state.currentPencePerLitre || 0)}</span>`;
+  if (captionEl) captionEl.textContent = `${state.regionLabel} • ${state.source === 'live' ? 'Live feed' : 'Sample data'} • updated ${new Date(state.updatedAt || Date.now()).toLocaleString('en-GB', { hour: '2-digit', minute: '2-digit' })}`;
+  if (averageEl) averageEl.textContent = formatPencePerLitre(state.averagePencePerLitre || 0);
+  if (lowestEl) lowestEl.textContent = formatPencePerLitre(state.lowestPencePerLitre || 0);
+  if (highestEl) highestEl.textContent = formatPencePerLitre(state.highestPencePerLitre || 0);
+  if (dailyChangeEl) dailyChangeEl.textContent = `${dailyChangePence >= 0 ? '+' : ''}${dailyChangePence.toFixed(1)} p`;
+  if (weeklyChangeEl) weeklyChangeEl.textContent = `${weeklyChangePence >= 0 ? '+' : ''}${weeklyChangePence.toFixed(1)} p`;
+  if (trendEl) trendEl.textContent = `${getTrendDirection(dailyChangePence)} ${getTrendLabel(dailyChangePence)}`;
   if (updatedEl) updatedEl.textContent = `Last updated ${formatTimestamp(state.updatedAt || Date.now())}`;
   if (sourcePill) sourcePill.textContent = state.source === 'live' ? 'Live UK quote' : 'Local sample data';
   if (badge) {
@@ -428,16 +528,78 @@ const wealthItems = [
   { title: 'Property', metric: 'To model', note: 'Legacy asset view' }
 ];
 
-const watchlistItems = [
-  { name: 'NVIDIA', value: '+2.1%', direction: 'up' },
-  { name: 'Tesla', value: '-0.8%', direction: 'down' },
-  { name: 'Shell', value: '+1.4%', direction: 'up' }
+const WATCHLIST_STORAGE_KEY = 'gj_watchlist_v1';
+const WATCHLIST_DEFAULTS = [
+  { symbol: 'NVDA', name: 'NVIDIA', value: '+2.1%', direction: 'up' },
+  { symbol: 'TSLA', name: 'Tesla', value: '-0.8%', direction: 'down' },
+  { symbol: 'SHEL', name: 'Shell', value: '+1.4%', direction: 'up' }
 ];
 
+let watchlistItems = loadWatchlist();
+
+function loadWatchlist() {
+  try {
+    const raw = localStorage.getItem(WATCHLIST_STORAGE_KEY);
+    if (!raw) return WATCHLIST_DEFAULTS.map((item) => ({ ...item }));
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) && parsed.length ? parsed : WATCHLIST_DEFAULTS.map((item) => ({ ...item }));
+  } catch (error) {
+    console.warn('Unable to load watchlist', error);
+    return WATCHLIST_DEFAULTS.map((item) => ({ ...item }));
+  }
+}
+
+function saveWatchlist() {
+  try {
+    localStorage.setItem(WATCHLIST_STORAGE_KEY, JSON.stringify(watchlistItems));
+  } catch (error) {
+    console.warn('Unable to save watchlist', error);
+  }
+}
+
+function renderWatchlist() {
+  watchlistList.innerHTML = '';
+  if (!watchlistItems.length) {
+    watchlistList.innerHTML = '<div class="muted-text">No symbols yet. Add one above to monitor it.</div>';
+    return;
+  }
+  watchlistItems.forEach((item) => {
+    const row = document.createElement('div');
+    row.className = 'watchlist-item';
+    row.innerHTML = `
+      <div>
+        <strong>${item.symbol || item.name}</strong>
+        <span>${item.name || item.symbol}</span>
+      </div>
+      <div style="display:flex;align-items:center;gap:0.6rem;">
+        <span class="${item.direction === 'down' ? 'negative' : 'positive'}">${item.value || '—'}</span>
+        <button class="ghost-btn" data-watchlist-remove="${item.symbol || item.name}" aria-label="Remove ${item.symbol || item.name}">Remove</button>
+      </div>
+    `;
+    watchlistList.appendChild(row);
+  });
+}
+
+function addWatchlistItem(symbol, name) {
+  const trimmedSymbol = (symbol || '').trim().toUpperCase();
+  const trimmedName = (name || trimmedSymbol).trim();
+  if (!trimmedSymbol) return;
+  if (watchlistItems.some((item) => (item.symbol || item.name).toUpperCase() === trimmedSymbol)) return;
+  watchlistItems.unshift({ symbol: trimmedSymbol, name: trimmedName, value: '+0.0%', direction: 'up' });
+  saveWatchlist();
+  renderWatchlist();
+}
+
+function removeWatchlistItem(symbol) {
+  watchlistItems = watchlistItems.filter((item) => (item.symbol || item.name).toUpperCase() !== symbol.toUpperCase());
+  saveWatchlist();
+  renderWatchlist();
+}
+
 const newsItems = [
-  { title: 'Policy tone stays constructive', detail: 'Central banks signal patience while growth remains resilient.' },
-  { title: 'Energy supply risk persists', detail: 'Oil volatility remains elevated ahead of the next supply update.' },
-  { title: 'Risk appetite holds', detail: 'Quality names continue to lead as volatility stays under control.' }
+  { title: 'Policy tone stays constructive', detail: 'Central banks signal patience while growth remains resilient.', source: 'Reuters', time: '08:15' },
+  { title: 'Energy supply risk persists', detail: 'Oil volatility remains elevated ahead of the next supply update.', source: 'Bloomberg', time: '09:40' },
+  { title: 'Risk appetite holds', detail: 'Quality names continue to lead as volatility stays under control.', source: 'FT', time: '10:05' }
 ];
 
 // News state
@@ -794,24 +956,6 @@ const explanationToggle = document.querySelector('[data-explanation-toggle]');
 const explanationPanel = document.getElementById('recommendation-explanation');
 const explanationStorageKey = 'gj-ai-why-open';
 
-function renderMarkets() {
-  marketGrid.innerHTML = '';
-  marketItems.forEach((market, index) => {
-    const item = document.createElement('article');
-    item.className = 'market-item';
-    item.style.animationDelay = `${index * 40}ms`;
-    item.innerHTML = `
-      <div class="market-item-header">
-        <span>${market.name}</span>
-        <span class="market-item-status ${market.status}">${market.status === 'live' ? 'Live' : 'Demo'}</span>
-      </div>
-      <strong>${market.value}</strong>
-      <span class="market-change ${market.direction === 'down' ? 'negative' : market.direction === 'up' ? 'positive' : 'neutral'}">${market.change || '—'}</span>
-    `;
-    marketGrid.appendChild(item);
-  });
-}
-
 function renderPortfolioStats() {
   portfolioStats.innerHTML = '';
   wealthItems.forEach((item) => {
@@ -825,20 +969,21 @@ function renderPortfolioStats() {
   });
 }
 
-function renderWatchlist() {
-  watchlistList.innerHTML = '';
-  watchlistItems.forEach((item) => {
-    const row = document.createElement('div');
-    row.className = 'watchlist-item';
-    row.innerHTML = `
-      <div>
-        <strong>${item.name}</strong>
-        <span>Demo watchlist item</span>
-      </div>
-      <span class="${item.direction === 'down' ? 'negative' : 'positive'}">${item.value}</span>
-    `;
-    watchlistList.appendChild(row);
-  });
+function renderPortfolioInsight() {
+  const portfolio = loadPortfolio();
+  const values = calculatePortfolioValues(portfolio);
+  const winners = Object.values(values.assets).filter((asset) => asset.profitLoss > 0).sort((a, b) => b.profitLoss - a.profitLoss);
+  const losers = Object.values(values.assets).filter((asset) => asset.profitLoss < 0).sort((a, b) => a.profitLoss - b.profitLoss);
+  const insight = document.getElementById('ai-insight');
+  if (!insight) return;
+  const topWinner = winners[0];
+  const topLoser = losers[0];
+  insight.innerHTML = `
+    <div class="muted-text">Why markets moved today</div>
+    <strong>${values.total > 0 ? 'Momentum remains constructive with rate-sensitive assets leading the move.' : 'Risk remains elevated as markets digest macro data.'}</strong>
+    <div class="muted-text">Biggest winner: ${topWinner ? (topWinner.asset || '—') : '—'} · Biggest loser: ${topLoser ? (topLoser.asset || '—') : '—'}</div>
+    <div class="muted-text">Risk level: ${values.returnPct < -5 ? 'High' : values.returnPct > 5 ? 'Moderate' : 'Balanced'} · AI confidence: ${Math.max(70, Math.min(95, 75 + (values.totalPL > 0 ? 5 : 0)))}%</div>
+  `;
 }
 
 function renderNews() {
@@ -849,6 +994,7 @@ function renderNews() {
     listItem.innerHTML = `
       <h3>${item.title}</h3>
       <p>${item.detail}</p>
+      <div class="muted-text">${item.source || 'Financial Times'} · ${item.time || 'Just now'}</div>
     `;
     newsList.appendChild(listItem);
   });
@@ -874,6 +1020,29 @@ function formatPercent(value) {
   return `${value >= 0 ? '+' : ''}${value.toFixed(1)}%`;
 }
 
+function formatMarketValue(id, value) {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) {
+    return '';
+  }
+  if (id === 'bitcoin' || id === 'ethereum') {
+    return `£${numeric.toLocaleString('en-GB')}`;
+  }
+  if (id === 'brent') {
+    return `$${numeric.toFixed(1)}`;
+  }
+  if (id === 'gbpUsd' || id === 'eurUsd') {
+    return numeric.toFixed(2);
+  }
+  if (id === 'gold') {
+    return `£${numeric.toFixed(0)}`;
+  }
+  if (id === 'silver') {
+    return `£${numeric.toFixed(2)}`;
+  }
+  return numeric.toLocaleString('en-GB');
+}
+
 function formatTimestamp(timestamp) {
   return new Date(timestamp).toLocaleTimeString('en-GB', {
     hour: '2-digit',
@@ -888,6 +1057,43 @@ function updateMarketItem(id, updates) {
     return;
   }
   Object.assign(item, updates);
+}
+
+async function loadSampleMarketData() {
+  try {
+    const response = await fetch('./market-data.json', { cache: 'no-store' });
+    if (!response.ok) {
+      throw new Error(`Market sample request failed (${response.status})`);
+    }
+    const payload = await response.json();
+    return payload;
+  } catch (error) {
+    console.warn('Falling back to live market data sources', error);
+    return null;
+  }
+}
+
+function applySampleMarketData(payload) {
+  const assets = Array.isArray(payload?.assets) ? payload.assets : [];
+  if (!assets.length) {
+    return false;
+  }
+
+  const map = new Map(assets.map((item) => [item.id, item]));
+  marketItems.forEach((item) => {
+    const match = map.get(item.id);
+    if (!match) {
+      return;
+    }
+    updateMarketItem(item.id, {
+      value: formatMarketValue(match.id, match.value),
+      change: formatPercent(Number(match.change)),
+      direction: match.direction || 'neutral',
+      status: 'demo'
+    });
+  });
+
+  return true;
 }
 
 function parseNumeric(value) {
@@ -1126,18 +1332,18 @@ function runAIRecommendation() {
 function updateLiveStatusDisplay() {
   const liveStatusPill = document.getElementById('live-status-pill');
   const liveStatusCopy = document.getElementById('live-status-copy');
-  const totalLive = [liveState.bitcoin, liveState.ethereum, liveState.gbpUsd].filter(Boolean).length;
-  let label = 'Offline / using fallback data';
+  let label = 'Delayed';
   let pillClass = 'status-offline';
-  let extraCopy = '';
+  let extraCopy = 'No fresh market snapshot available';
 
-  if (totalLive === 3) {
+  if (marketDataStatus === 'live') {
     label = 'Live data connected';
     pillClass = 'status-live';
-  } else if (totalLive > 0) {
-    label = 'Partially live';
+    extraCopy = 'Twelve Data quotes refreshed successfully';
+  } else if (marketDataStatus === 'closed') {
+    label = 'Market closed';
     pillClass = 'status-partial';
-    extraCopy = 'Some live data unavailable';
+    extraCopy = 'Markets are closed; showing latest available values';
   }
 
   if (liveStatusPill) {
@@ -1146,9 +1352,8 @@ function updateLiveStatusDisplay() {
   }
 
   if (liveStatusCopy) {
-    const timeText = liveState.lastUpdate ? formatTimestamp(liveState.lastUpdate) : 'never';
-    const sourceText = liveState.gbpUsdSourceDate ? ` | GBP/USD source ${liveState.gbpUsdSourceDate}` : '';
-    liveStatusCopy.textContent = `Last update: ${timeText}${sourceText}${extraCopy ? ' · ' + extraCopy : ''}`;
+    const timeText = lastSuccessfulMarketSnapshot ? formatTimestamp(lastSuccessfulMarketSnapshot.timestamp || Date.now()) : 'never';
+    liveStatusCopy.textContent = `Last update: ${timeText} · ${extraCopy}`;
   }
 }
 
@@ -1223,17 +1428,46 @@ async function fetchFrankfurterData() {
   }
 }
 
+async function tryApplyOfflineFallback(errorDetail = null) {
+  try {
+    const payload = await loadSampleMarketData();
+    const applied = applySampleMarketData(payload);
+    if (applied) {
+      if (errorDetail) {
+        console.warn('[Market UI] Using offline fallback because live data failed:', errorDetail);
+      }
+      return true;
+    }
+  } catch (fallbackError) {
+    console.error('[Market UI] Offline fallback failed:', fallbackError);
+  }
+
+  if (errorDetail) {
+    console.error('[Market UI] Live data failed and no offline fallback was available:', errorDetail);
+  }
+  return false;
+}
+
 async function refreshMarketData() {
   if (refreshButton) {
     refreshButton.disabled = true;
     refreshButton.textContent = 'Updating...';
   }
 
-  const [coinResult, fxResult] = await Promise.allSettled([fetchCoinGeckoData(), fetchFrankfurterData()]);
-  const anySuccess = [coinResult, fxResult].some((result) => result.status === 'fulfilled' && result.value === true);
+  const snapshot = await marketDataService.getMarketSnapshot();
+  let usedFallback = false;
 
-  if (anySuccess) {
-    liveState.lastUpdate = Date.now();
+  if (snapshot && snapshot.data) {
+    const success = applyMarketSnapshot(snapshot);
+    if (!success) {
+      usedFallback = await tryApplyOfflineFallback(snapshot.error || null);
+    }
+  } else {
+    usedFallback = await tryApplyOfflineFallback(snapshot?.error || null);
+  }
+
+  if (!usedFallback) {
+    setDelayedMarketStatus(snapshot?.error || null);
   }
 
   renderMarkets();
@@ -1249,14 +1483,17 @@ async function refreshMarketData() {
 
 function renderTicker() {
   const repeatedItems = [...marketItems, ...marketItems];
-  const tickerMarkup = repeatedItems.map((item) => `
-    <div class="ticker-item">
-      <span class="ticker-name">${item.name}</span>
-      <span class="ticker-badge ${item.status}">${item.status === 'live' ? 'Live' : 'Demo'}</span>
-      <span class="ticker-value">${item.value}</span>
-      <span class="ticker-change ${item.direction === 'down' ? 'negative' : item.direction === 'up' ? 'positive' : 'neutral'}">${item.change || '—'}</span>
-    </div>
-  `).join('');
+  const tickerMarkup = repeatedItems.map((item) => {
+    const badgeText = item.status === 'live' ? 'LIVE' : item.status === 'closed' ? 'CLOSED' : 'DELAYED';
+    return `
+      <div class="ticker-item">
+        <span class="ticker-name">${item.name}</span>
+        <span class="ticker-badge ${item.status === 'live' ? 'live' : item.status === 'closed' ? 'closed' : 'delayed'}">${badgeText}</span>
+        <span class="ticker-value">${item.value}</span>
+        <span class="ticker-change ${item.direction === 'down' ? 'negative' : item.direction === 'up' ? 'positive' : 'neutral'}">${item.change || '—'}</span>
+      </div>
+    `;
+  }).join('');
 
   if (tickerTrack) {
     tickerTrack.innerHTML = tickerMarkup;
@@ -1703,6 +1940,18 @@ document.addEventListener('click', (e) => {
   }
 });
 
+const watchlistForm = document.getElementById('watchlist-form');
+if (watchlistForm) {
+  watchlistForm.addEventListener('submit', (event) => {
+    event.preventDefault();
+    const symbolInput = document.getElementById('watchlist-symbol');
+    const nameInput = document.getElementById('watchlist-name');
+    if (symbolInput) addWatchlistItem(symbolInput.value, nameInput ? nameInput.value : '');
+    if (symbolInput) symbolInput.value = '';
+    if (nameInput) nameInput.value = '';
+  });
+}
+
 // Ensure portfolio renders after market updates
 function onMarketRefreshed() {
   renderPortfolio();
@@ -1720,6 +1969,7 @@ refreshMarketData = async function() {
 
 // initial render
 renderPortfolio();
+renderPortfolioInsight();
 
 // Alerts and monitoring
 function checkAlerts() {
@@ -1798,13 +2048,26 @@ async function loadChartData(asset, days) {
     const res = await fetch(url);
     if (!res.ok) throw new Error('CoinGecko error');
     const data = await res.json();
-    // data.prices = [[ts, price], ...]
     const prices = Array.isArray(data.prices) ? data.prices : [];
-    const labels = prices.map(p => new Date(p[0]));
-    const vals = prices.map(p => p[1]);
+    const labels = prices.map((p) => new Date(p[0]));
+    const vals = prices.map((p) => p[1]);
     chartState.lastData = { labels, vals };
     return { labels, vals };
   } catch (error) {
+    try {
+      const samplePayload = await loadSampleMarketData();
+      const sampleSeries = samplePayload?.chartSeries?.[asset];
+      if (sampleSeries && Array.isArray(sampleSeries)) {
+        const samplePoints = sampleSeries.slice(-Math.max(7, Math.min(90, days <= 1 ? 7 : days <= 7 ? 7 : days <= 30 ? 30 : 90)));
+        const labels = samplePoints.map((point) => new Date(point.date));
+        const vals = samplePoints.map((point) => Number(point.value));
+        chartState.lastData = { labels, vals };
+        return { labels, vals };
+      }
+    } catch (fallbackError) {
+      console.warn('Offline chart fallback failed', fallbackError);
+    }
+
     console.warn('loadChartData failed', error);
     return null;
   }
