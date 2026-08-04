@@ -5,7 +5,8 @@ const REQUEST_WINDOW_MS = 60 * 1000;
 const MAX_REQUESTS_PER_WINDOW = 8;
 const REQUEST_HISTORY = [];
 const TWELVE_DATA_QUOTE_URL = 'https://api.twelvedata.com/quote';
-const SECURE_PROXY_URL = 'https://market-data-proxy.gj-ai-investor.workers.dev/quote';
+const SECURE_PROXY_URL =
+  'https://gjwealth-market-proxy.gerallt-jones.workers.dev';
 const ENABLED_SYMBOLS = [
   { id: 'aapl', name: 'Apple', symbol: 'AAPL', kind: 'stock' },
   { id: 'sp500', name: 'S&P 500', symbol: 'SPY', kind: 'etf', note: 'ETF proxy' },
