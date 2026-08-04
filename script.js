@@ -975,6 +975,68 @@ const explanationToggle = document.querySelector('[data-explanation-toggle]');
 const explanationPanel = document.getElementById('recommendation-explanation');
 const explanationStorageKey = 'gj-ai-why-open';
 
+function renderAdvisorAnalysis() {
+  if (!window.aiAdvisorService || typeof window.aiAdvisorService.generateAdvisorAnalysis !== 'function') {
+    return;
+  }
+
+  const portfolio = loadPortfolio();
+  const analysis = window.aiAdvisorService.generateAdvisorAnalysis({
+    marketItems,
+    portfolio,
+    watchlistItems
+  });
+
+  const summaryEl = document.getElementById('advisor-market-summary');
+  const trendEl = document.getElementById('advisor-market-trend');
+  const strongestEl = document.getElementById('advisor-strongest');
+  const weakestEl = document.getElementById('advisor-weakest');
+  const totalValueEl = document.getElementById('advisor-total-value');
+  const totalPlEl = document.getElementById('advisor-total-pl');
+  const largestHoldingEl = document.getElementById('advisor-largest-holding');
+  const riskLevelEl = document.getElementById('advisor-risk-level');
+  const bestPerformerEl = document.getElementById('advisor-best-performer');
+  const worstPerformerEl = document.getElementById('advisor-worst-performer');
+  const cashBalanceEl = document.getElementById('advisor-cash-balance');
+  const riskRatingEl = document.getElementById('advisor-risk-rating');
+  const confidenceEl = document.getElementById('advisor-confidence');
+  const confidencePill = document.getElementById('advisor-confidence-pill');
+  const riskReasonsEl = document.getElementById('advisor-risk-reasons');
+  const riskHighlightsEl = document.getElementById('advisor-risk-highlights');
+  const actionsEl = document.getElementById('advisor-actions');
+  const emptyStateEl = document.getElementById('advisor-portfolio-empty');
+
+  if (summaryEl) summaryEl.textContent = analysis.marketSummary?.text || 'Waiting for market data…';
+  if (trendEl) trendEl.textContent = analysis.marketSummary?.direction ? analysis.marketSummary.direction.charAt(0).toUpperCase() + analysis.marketSummary.direction.slice(1) : '—';
+  if (strongestEl) strongestEl.textContent = analysis.marketSummary?.strongestAsset || '—';
+  if (weakestEl) weakestEl.textContent = analysis.marketSummary?.weakestAsset || '—';
+  if (totalValueEl) totalValueEl.textContent = formatGBP(analysis.portfolio?.totalValue || 0);
+  if (totalPlEl) totalPlEl.textContent = formatGBP(analysis.portfolio?.totalGainLoss || 0);
+  if (largestHoldingEl) largestHoldingEl.textContent = analysis.portfolio?.largestHolding || '—';
+  if (riskLevelEl) riskLevelEl.textContent = analysis.portfolio?.concentrationRisk || 'Low';
+  if (bestPerformerEl) bestPerformerEl.textContent = analysis.portfolio?.bestPerformer || '—';
+  if (worstPerformerEl) worstPerformerEl.textContent = analysis.portfolio?.worstPerformer || '—';
+  if (cashBalanceEl) cashBalanceEl.textContent = formatGBP(analysis.portfolio?.cashBalance || 0);
+  if (riskRatingEl) riskRatingEl.textContent = analysis.riskAssessment?.level || 'Low';
+  if (confidenceEl) confidenceEl.textContent = analysis.confidence || 'Low';
+  if (confidencePill) {
+    confidencePill.textContent = analysis.confidence || 'Low';
+    confidencePill.className = `status-pill ${analysis.confidence === 'High' ? 'status-live' : analysis.confidence === 'Medium' ? 'status-partial' : 'status-offline'}`;
+  }
+  if (riskReasonsEl) riskReasonsEl.innerHTML = (analysis.riskAssessment?.reasons || []).map((reason) => `<li>${reason}</li>`).join('');
+  if (riskHighlightsEl) riskHighlightsEl.textContent = (analysis.riskAssessment?.highlights || []).join(' ');
+  if (actionsEl) actionsEl.innerHTML = (analysis.actions || []).map((action) => `<li>${action}</li>`).join('');
+  if (emptyStateEl) {
+    if (analysis.portfolio?.emptyState) {
+      emptyStateEl.textContent = analysis.portfolio.emptyState;
+      emptyStateEl.style.display = 'block';
+    } else {
+      emptyStateEl.textContent = '';
+      emptyStateEl.style.display = 'none';
+    }
+  }
+}
+
 function renderPortfolioStats() {
   portfolioStats.innerHTML = '';
   wealthItems.forEach((item) => {
@@ -1515,6 +1577,7 @@ async function refreshMarketData() {
     renderTicker();
     updateLiveStatusDisplay();
     runAIRecommendation();
+    renderAdvisorAnalysis();
   } finally {
     marketRefreshInFlight = false;
     marketRefreshCooldownUntil = Date.now() + 60 * 1000;
@@ -1727,6 +1790,7 @@ setupTickerInteraction(document.querySelector('.market-ticker'));
 setupTickerInteraction(document.querySelector('.mobile-market-ticker'));
 updateLiveStatusDisplay();
 runAIRecommendation();
+renderAdvisorAnalysis();
 renderOilDashboard(oilState);
 refreshHeatingOilData();
 startOilAutoRefresh();
@@ -1888,6 +1952,7 @@ function sellAsset(amountGbp, asset) {
 function renderPortfolio() {
   const portfolio = loadPortfolio();
   const vals = calculatePortfolioValues(portfolio);
+  renderAdvisorAnalysis();
   document.getElementById('pf-total').textContent = formatGBP(vals.total);
   document.getElementById('pf-cash').textContent = formatGBP(portfolio.cash);
   document.getElementById('pf-invested').textContent = formatGBP(vals.invested);

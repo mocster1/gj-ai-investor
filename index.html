@@ -239,6 +239,57 @@
             <p class="muted-text">Volatility remains contained and quality names are leading the move.</p>
           </section>
 
+          <section class="card card-large advisor-card" id="advisor-page">
+            <div class="card-header">
+              <div>
+                <p class="eyebrow">AI Advisor</p>
+                <h2>Personal investing review</h2>
+              </div>
+              <div class="card-actions">
+                <span class="status-pill" id="advisor-confidence-pill">Low</span>
+                <button class="ghost-btn" type="button" id="refresh-advisor-btn">Refresh analysis</button>
+              </div>
+            </div>
+            <div class="advisor-shell">
+              <div class="advisor-block">
+                <h3>Market summary</h3>
+                <p id="advisor-market-summary" class="muted-text">Waiting for market data…</p>
+                <div class="advisor-metrics">
+                  <div><span>Trend</span><strong id="advisor-market-trend">—</strong></div>
+                  <div><span>Strongest</span><strong id="advisor-strongest">—</strong></div>
+                  <div><span>Weakest</span><strong id="advisor-weakest">—</strong></div>
+                </div>
+              </div>
+              <div class="advisor-block">
+                <h3>Portfolio review</h3>
+                <p id="advisor-portfolio-empty" class="muted-text" style="display:none"></p>
+                <div class="advisor-metrics">
+                  <div><span>Total value</span><strong id="advisor-total-value">—</strong></div>
+                  <div><span>Total gain/loss</span><strong id="advisor-total-pl">—</strong></div>
+                  <div><span>Largest holding</span><strong id="advisor-largest-holding">—</strong></div>
+                  <div><span>Concentration risk</span><strong id="advisor-risk-level">—</strong></div>
+                  <div><span>Best performer</span><strong id="advisor-best-performer">—</strong></div>
+                  <div><span>Worst performer</span><strong id="advisor-worst-performer">—</strong></div>
+                  <div><span>Cash balance</span><strong id="advisor-cash-balance">—</strong></div>
+                </div>
+              </div>
+              <div class="advisor-block">
+                <h3>Risk assessment</h3>
+                <div class="advisor-metrics">
+                  <div><span>Rating</span><strong id="advisor-risk-rating">—</strong></div>
+                  <div><span>Confidence</span><strong id="advisor-confidence">—</strong></div>
+                </div>
+                <ul id="advisor-risk-reasons" class="advisor-list"></ul>
+                <p class="muted-text" id="advisor-risk-highlights"></p>
+              </div>
+              <div class="advisor-block">
+                <h3>Suggested actions</h3>
+                <ul id="advisor-actions" class="advisor-list"></ul>
+                <p class="disclaimer">For personal research and information only. Not financial advice.</p>
+              </div>
+            </div>
+          </section>
+
           <section class="card card-large portfolio-card" id="portfolio">
             <div class="card-header">
               <div>
@@ -580,6 +631,7 @@
     </div>
 
     <script type="module" src="marketDataService.js"></script>
+    <script src="aiAdvisorService.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js" defer></script>
     <script src="script.js" defer></script>
   </body>
